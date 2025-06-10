@@ -258,7 +258,7 @@ function Setup-PythonEnvironment {
             }
         } else {
             # Install PySimpleGUI directly if requirements.txt doesn't exist
-            & $venvPython -m pip install PySimpleGUI==5.0.8.3
+            & $venvPython -m pip install --extra-index-url https://PySimpleGUI.net/install PySimpleGUI
             
             if ($LASTEXITCODE -ne 0) {
                 throw "Failed to install PySimpleGUI"
