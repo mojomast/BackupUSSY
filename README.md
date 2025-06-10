@@ -1,8 +1,8 @@
-# 📼 BackupUSSY v0.1.2 - Professional LTO Tape Archive Tool
+# 📼 BackupUSSY v0.1.4 - Professional LTO Tape Archive Tool
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-0.1.2-brightgreen.svg)
+![Version](https://img.shields.io/badge/version-0.1.4-brightgreen.svg)
 ![Platform](https://img.shields.io/badge/platform-windows-lightgrey.svg)
 ![FreeSimpleGUI](https://img.shields.io/badge/FreeSimpleGUI-5.2.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
@@ -61,7 +61,7 @@ BackupUSSY is a comprehensive LTO tape archive solution designed for Windows env
 [![Download Latest Release](https://img.shields.io/github/release/mojomast/backupussy.svg?style=flat-square)](https://github.com/mojomast/backupussy/releases/latest)
 
 1. Go to [Releases](https://github.com/mojomast/backupussy/releases)
-2. Download `BackupUSSY-standalone-v0.1.2.zip`
+2. Download `BackupUSSY-standalone-v0.1.4.zip`
 3. Extract to any location (e.g., `C:\BackupUSSY`)
 4. **That's it!** Double-click `Launch-BackupUSSY.bat`
 
@@ -103,7 +103,7 @@ python src/database_init.py
 ### Standalone Version (Zero-Setup)
 
 **Download and Run:**
-1. Download `BackupUSSY-standalone-v0.1.2.zip` from [releases](https://github.com/mojomast/backupussy/releases)
+1. Download `BackupUSSY-standalone-v0.1.4.zip` from [releases](https://github.com/mojomast/backupussy/releases)
 2. Extract anywhere you want
 3. Double-click `Launch-BackupUSSY.bat`
 4. **Done!** BackupUSSY is ready to use
@@ -383,6 +383,20 @@ For support, bug reports, or feature requests:
 This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## 🏷️ Version History
+
+### **v0.1.4** - Database & UI Critical Fixes
+- **Database Population Fix**: Fixed issue where database wasn't being populated when folders were stored on cassettes
+- **UI Refresh Fix**: Fixed UI not updating with new files after successful archive operations
+- **Missing Methods**: Added `find_archive_by_name()` and `get_archive_files()` database methods
+- **Statistics Display**: Fixed method call errors in statistics display
+- **UI Integration**: Implemented missing UI update methods for all tabs
+- **Enhanced Error Handling**: Improved error logging with full stack traces
+- **Real-time Updates**: All tabs now properly refresh after archive operations
+
+### **v0.1.3** - GUI Structure Improvements
+- **Code Structure**: Fixed GUI method indentation and organization
+- **Stability**: Improved application reliability and maintainability
+- **Logic Fixes**: Removed duplicated code blocks in import functionality
 
 ### **v0.1.2** - Critical Bug Fixes
 - **ArchiveMode Import Fix**: Fixed missing import causing archive job failures

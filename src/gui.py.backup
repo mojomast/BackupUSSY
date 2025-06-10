@@ -443,7 +443,8 @@ class LTOArchiveGUI:
         # Main layout
         layout = [
             [sg.Frame('Source Folder', folder_frame, expand_x=True)],
-            [sg.Frame('Device & Options', device_frame, expand_x=True)],
+            [sg.Frame('Tape Device', device_frame, expand_x=True)],
+            [sg.Frame('Archive Options', options_frame, expand_x=True)],
             [sg.Frame('Progress', progress_frame, expand_x=True)],
             [sg.Frame('Controls', button_frame, expand_x=True)]
         ]
@@ -455,8 +456,8 @@ class LTOArchiveGUI:
             finalize=True
         )
         
-        # Initialize device list
-        self.refresh_devices()
+        # Initial status update
+        self.update_tape_status()
     
     def update_tape_status(self):
         """Update the tape device status display."""
@@ -603,60 +604,57 @@ class LTOArchiveGUI:
             
             # Initial status update
             self.update_tape_status()
-    
-    def refresh_devices(self):
-        """Refresh the list of available tape devices."""
-        try:
-            devices = self.tape_manager.detect_tape_devices()
-            self.window['-DEVICE-'].update(values=devices)
-            if devices:
-                self.window['-DEVICE-'].update(value=devices[0])
-        except Exception as e:
-            logger.error(f"Failed to refresh devices: {e}")
-    
-    def update_folder_size(self, folder_path):
-        """Update the estimated folder size display."""
-        try:
-            if folder_path and os.path.exists(folder_path):
-                size, count = self.archive_manager.estimate_archive_size(folder_path)
-                size_mb = size / (1024 * 1024)
-                logger.info(f"Folder size: {size_mb:.1f} MB ({count} files)")
-        except Exception as e:
-            logger.error(f"Failed to calculate folder size: {e}")
-    
-    def log_message(self, message):
-        """Add a message to the log display."""
-        timestamp = time.strftime('%H:%M:%S')
-        log_entry = f"[{timestamp}] {message}\n"
-        if self.window and '-LOG-' in self.window.AllKeysDict:
+        
+        def update_tape_status(self):
+            """Update the tape device status display."""
+            try:
+                device = self.window['-DEVICE-'].get()
+                status = self.tape_manager.get_tape_status(device)
+                status_text = f"{status['status']}: {status['details'][:30]}..."
+                self.window['-TAPE_STATUS-'].update(status_text)
+            except Exception as e:
+                self.window['-TAPE_STATUS-'].update(f"Error: {str(e)[:30]}...")
+        
+        def update_folder_size(self, folder_path):
+            """Update the estimated folder size display."""
+            try:
+                if folder_path and os.path.exists(folder_path):
+                    size, count = self.archive_manager.estimate_archive_size(folder_path)
+                    size_mb = size / (1024 * 1024)
+                    self.window['-SIZE-'].update(f"{size_mb:.1f} MB ({count} files)")
+                else:
+                    self.window['-SIZE-'].update("Not calculated")
+            except Exception as e:
+                self.window['-SIZE-'].update(f"Error: {e}")
+        
+        def log_message(self, message):
+            """Add a message to the log display."""
+            timestamp = time.strftime('%H:%M:%S')
+            log_entry = f"[{timestamp}] {message}\n"
             self.window['-LOG-'].print(log_entry, end='')
-        logger.info(message)
-    
-    def update_progress(self, percent, status=""):
-        """Update the progress bar and status."""
-        if self.window:
-            if '-PROGRESS-' in self.window.AllKeysDict:
-                self.window['-PROGRESS-'].update(percent)
-            if status and '-STATUS-' in self.window.AllKeysDict:
+        
+        def update_progress(self, percent, status=""):
+            """Update the progress bar and status."""
+            self.window['-PROGRESS-'].update(percent)
+            if status:
                 self.window['-STATUS-'].update(status)
-    
-    def start_archive_job(self, config):
-        """Start the archive job in a separate thread."""
-        # Pre-flight checks
-        if not self.pre_archive_checks(config):
-            if self.window:
+        
+        def start_archive_job(self, config):
+            """Start the archive job in a separate thread."""
+            # Pre-flight checks and duplicate detection
+            if not self.pre_archive_checks(config):
                 self.window['-START-'].update(disabled=False)
                 self.window['-CANCEL-'].update(disabled=True)
-            return
+                return
+            
+            self.job_thread = threading.Thread(
+                target=self.run_archive_job,
+                args=(config,),
+                daemon=True
+            )
+            self.job_thread.start()
         
-        self.job_thread = threading.Thread(
-            target=self.run_archive_job,
-            args=(config,),
-            daemon=True
-        )
-        self.job_thread.start()
-    
-    def run_archive_job(self, config):
+        def run_archive_job(self, config):
             """Run the archive job (called in separate thread)."""
             try:
                 self.log_message("Starting archive job...")

@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4] - 2025-06-10
+
+### Fixed - Critical Database and UI Issues
+- **Database Population**: Fixed issue where database wasn't being populated when folders were stored on cassettes
+- **UI Refresh**: Fixed UI not updating with new files after successful archive operations
+- **Missing Database Methods**: Added `find_archive_by_name()` and `get_archive_files()` methods to database manager
+- **Statistics Display**: Fixed `get_library_statistics()` method call error - now properly calls `get_database_stats()`
+- **UI Update Methods**: Implemented missing `update_tape_list()`, `populate_recovery_tapes()`, and `populate_search_tapes()` methods
+- **Tape Status Parameter**: Fixed `add_tape()` method to properly handle `tape_status` parameter
+
+### Enhanced
+- **Better Error Handling**: Improved error logging with full stack traces for debugging
+- **Database Integration**: Enhanced archive manager integration with database operations
+- **UI Responsiveness**: All tabs now properly refresh after archive operations complete
+- **Statistics Updates**: Real-time statistics updates in management tab
+- **User Feedback**: Better progress reporting during file indexing operations
+
+### Technical Improvements
+- Corrected method signatures in database manager
+- Added comprehensive UI refresh workflow after archive completion
+- Enhanced database transaction handling for archive operations
+- Improved file indexing process with better error recovery
+- Added proper statistics calculation and display methods
+
+### User Experience
+- Archive operations now properly populate the database with tape, archive, and file records
+- UI immediately shows new archives and files after successful operations
+- Statistics panel updates in real-time showing current database state
+- All tabs (Archive, Recovery, Search, Management) stay synchronized
+- Better feedback during long-running file indexing operations
+
+## [0.1.3] - 2025-06-09
+
+### Fixed
+- **GUI Structure**: Corrected indentation of various helper methods in `LTOArchiveGUI` (`src/gui.py`) to their proper class-level, significantly improving code structure and maintainability.
+- **GUI Logic**: Removed a duplicated code block within the `handle_import_data` method in `src/gui.py`, resolving a logical error and reducing redundancy.
+
+### Changed
+- **Core Managers**: Implemented general stability improvements and minor fixes in `src/archive_manager.py`, `src/database_manager.py`, and `src/tape_manager.py`.
+
+
 ### Planned
 - Web interface for remote management
 - Barcode label support

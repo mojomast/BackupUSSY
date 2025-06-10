@@ -7,6 +7,7 @@ import os
 import subprocess
 import logging
 import time
+import re # Added for parsing dd output
 from pathlib import Path
 try:
     import wmi
@@ -247,7 +248,17 @@ class TapeManager:
             logger.error(f"Error writing to tape: {e}")
             return False, 0
     
-    def stream_to_tape(self, folder_path, device=None, compression=False, progress_callback=None):
+    def stream_to_tape(self, folder_path, device=None, compression=False, progress_callback=None) -> dict:
+        """Stream folder contents directly to tape using tar | dd.
+
+        Returns:
+            A dictionary with keys:
+            - 'success': bool, True if operation succeeded.
+            - 'bytes_written': Optional[int], total bytes written to tape.
+            - 'checksum': Optional[str], checksum of the stream (typically None or placeholder for stream).
+            - 'files_processed': Optional[int], number of files processed by tar.
+            - 'error_message': Optional[str], error message if success is False.
+        """
         """Stream folder contents directly to tape using tar | dd."""
         if device is None:
             device = self.default_device
@@ -260,12 +271,17 @@ class TapeManager:
         # Build tar command
         tar_cmd = [self.dep_manager.tar_path]
         
+        # -v (verbose) sends file list to stderr. -C changes directory for tar.
+        # We want to tar the contents of folder_path, not folder_path itself in a parent dir structure.
+        source_parent = os.path.dirname(folder_path)
+        source_name = os.path.basename(folder_path)
+
         if compression:
-            tar_cmd.extend(['-czf', '-'])  # Compress and output to stdout
+            tar_cmd.extend(['-cvzf', '-', '-C', source_parent, source_name]) # Compress, verbose, to stdout
         else:
-            tar_cmd.extend(['-cf', '-'])   # Output to stdout
+            tar_cmd.extend(['-cvf', '-', '-C', source_parent, source_name])  # Verbose, to stdout
         
-        tar_cmd.extend(['-v', folder_path])  # Verbose and source folder
+        # tar_cmd.extend(['-v', folder_path]) # Old: Verbose and source folder. Problematic if folder_path has spaces or relative paths interpreted from cwd of Popen.
         
         # Build dd command
         dd_cmd = [
@@ -316,17 +332,46 @@ class TapeManager:
                 logger.error(error_msg)
                 return False
             
-            if dd_process.returncode != 0:
-                error_msg = f"dd command failed: {dd_stderr}"
-                logger.error(error_msg)
-                return False
+            bytes_written = None
+            files_processed = 0
+            error_message = None
+
+            # Parse dd stderr for bytes written
+            # Example dd output: "123456789 bytes (123 MB, 118 MiB) copied, 10.5 s, 11.8 MB/s"
+            if dd_stderr:
+                # Try to find the last progress line or summary line from dd
+                dd_output_lines = dd_stderr.strip().split('\n')
+                for line in reversed(dd_output_lines):
+                    match = re.search(r"^(\d+) bytes", line)
+                    if match:
+                        bytes_written = int(match.group(1))
+                        logger.info(f"Parsed bytes written from dd: {bytes_written}")
+                        break
+                if bytes_written is None:
+                    logger.warning(f"Could not parse bytes written from dd stderr: {dd_stderr}")
             
-            logger.info(f"Successfully streamed folder to tape {device}")
-            return True
+            # Parse tar stderr for files processed (count non-empty lines from verbose output)
+            if tar_stderr:
+                # tar_stderr_decoded = tar_stderr.decode(errors='ignore') # tar_stderr is already text due to text=True in Popen
+                files_processed = len([line for line in tar_stderr.splitlines() if line.strip()])
+                logger.info(f"Parsed files processed from tar: {files_processed}")
+
+            if tar_process.returncode != 0:
+                error_message = f"tar command failed with code {tar_process.returncode}: {tar_stderr if tar_stderr else tar_stdout}"
+                logger.error(error_message)
+                return {'success': False, 'bytes_written': bytes_written, 'checksum': "STREAMED_UNVERIFIED", 'files_processed': files_processed, 'error_message': error_message}
+            
+            if dd_process.returncode != 0:
+                error_message = f"dd command failed with code {dd_process.returncode}: {dd_stderr if dd_stderr else dd_stdout}"
+                logger.error(error_message)
+                return {'success': False, 'bytes_written': bytes_written, 'checksum': "STREAMED_UNVERIFIED", 'files_processed': files_processed, 'error_message': error_message}
+            
+            logger.info(f"Successfully streamed folder to tape {device}. Bytes written: {bytes_written}, Files processed: {files_processed}")
+            return {'success': True, 'bytes_written': bytes_written, 'checksum': "STREAMED_UNVERIFIED", 'files_processed': files_processed, 'error_message': None}
             
         except Exception as e:
             logger.error(f"Error streaming to tape: {e}")
-            return False
+            return {'success': False, 'bytes_written': None, 'checksum': "STREAMED_UNVERIFIED", 'files_processed': None, 'error_message': str(e)}
     
     def verify_write(self, archive_path, device=None, original_checksum=None):
         """Verify tape write by reading back data (if possible)."""

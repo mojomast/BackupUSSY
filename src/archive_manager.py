@@ -95,8 +95,8 @@ class ArchiveManager:
     
     def create_cached_archive(self, folder_path, output_dir=None, compression=False, 
                              progress_callback=None, tape_label=None, tape_device=None, 
-                             index_files=True):
-        """Create a cached tar archive file."""
+                             index_files=True, archive_name_override=None):
+        """Create a cached tar archive file, record it in DB, and return its info."""
         if not self.dep_manager.tar_path:
             raise RuntimeError("tar executable not available")
         
@@ -105,8 +105,15 @@ class ArchiveManager:
             self.temp_dir = tempfile.mkdtemp(prefix="lto_archive_")
             output_dir = self.temp_dir
         
-        # Generate archive name
-        archive_name = self.generate_archive_name(folder_path, compression)
+        # Determine archive name
+        if archive_name_override:
+            archive_name = archive_name_override
+            if compression and not archive_name.endswith(('.tar.gz', '.tgz')):
+                archive_name += '.tar.gz'
+            elif not compression and not archive_name.endswith('.tar'):
+                archive_name += '.tar'
+        else:
+            archive_name = self.generate_archive_name(folder_path, compression)
         self.archive_path = os.path.join(output_dir, archive_name)
         
         logger.info(f"Creating cached archive: {self.archive_path}")
@@ -158,46 +165,64 @@ class ArchiveManager:
             self.archive_checksum = self._calculate_checksum(self.archive_path)
             logger.info(f"Archive checksum (SHA256): {self.archive_checksum}")
             
-            # Index files if requested and database available
-            if index_files and self.db_manager:
+            # Record in database if db_manager is available
+            self.current_tape_id = None
+            self.current_archive_id = None
+            if self.db_manager:
                 try:
-                    # Ensure we have a tape record
-                    if tape_label and tape_device:
-                        # Try to find existing tape or create new one
-                        existing_tape = self.db_manager.find_tape_by_label(tape_label)
-                        if existing_tape:
-                            self.current_tape_id = existing_tape['tape_id']
-                        else:
-                            self.current_tape_id = self.db_manager.add_tape(
-                                tape_label, tape_device, 
-                                f"Created during archive of {folder_path}"
-                            )
-                        
-                        # Get archive size and file count
-                        archive_size = os.path.getsize(self.archive_path)
-                        file_count = self._count_files_in_folder(folder_path)
-                        
+                    if not tape_label or not tape_device:
+                        logger.warning("Tape label or device not provided for DB record, attempting to use defaults or skip.")
+                        # Fallback or error, depending on desired strictness. For now, we'll try to proceed if possible.
+                        # If tape_label is crucial, this should raise an error or handle it more gracefully.
+                        effective_tape_label = tape_label or f"Tape_{tape_device.replace('.', '').replace('\\', '') if tape_device else 'UnknownDevice'}"
+                        effective_tape_device = tape_device or "UnknownDevice"
+                    else:
+                        effective_tape_label = tape_label
+                        effective_tape_device = tape_device
+
+                    # Add/get tape record
+                    self.current_tape_id = self.db_manager.add_tape_if_not_exists(
+                        effective_tape_label, 
+                        effective_tape_device, 
+                        tape_status='active',
+                        notes=f"Tape used for cached archive of {folder_path}"
+                    )
+
+                    if self.current_tape_id is not None:
+                        archive_size_bytes = os.path.getsize(self.archive_path)
+                        num_files = self._count_files_in_folder(folder_path)
+
                         # Add archive record
                         self.current_archive_id = self.db_manager.add_archive(
-                            self.current_tape_id,
-                            archive_name,
-                            folder_path,
-                            archive_size,
-                            file_count,
-                            self.archive_checksum,
-                            compression
+                            tape_id=self.current_tape_id,
+                            archive_name=archive_name, # Use the determined archive_name
+                            source_folder=folder_path,
+                            size_bytes=archive_size_bytes,
+                            num_files=num_files,
+                            archive_checksum=self.archive_checksum,
+                            compression_enabled=compression,
+                            status="completed" # Assuming cached archive is complete once created
                         )
-                        
-                        # Index individual files
-                        self._index_archive_contents(folder_path, self.current_archive_id, progress_callback)
-                        
-                        logger.info(f"Archive indexed in database: tape_id={self.current_tape_id}, archive_id={self.current_archive_id}")
-                        
+                        logger.info(f"Archive record added to DB: ID={self.current_archive_id}, TapeID={self.current_tape_id}")
+
+                        if index_files and self.current_archive_id:
+                            logger.info(f"Indexing files for archive ID {self.current_archive_id}...")
+                            self._index_archive_contents(folder_path, self.current_archive_id, progress_callback)
+                            logger.info("File indexing completed for cached archive.")
+                        elif not index_files:
+                            logger.info("File indexing skipped by user setting for cached archive.")
+                    else:
+                        logger.error(f"Failed to get or create tape ID for {effective_tape_label}. Archive DB record skipped.")
+
                 except Exception as e:
-                    logger.warning(f"Failed to index archive in database: {e}")
-                    # Continue without indexing - don't fail the archive operation
-            
-            return self.archive_path, self.archive_checksum
+                    logger.error(f"Error during database operations for cached archive: {e}", exc_info=True)
+                    # Depending on policy, we might want to set current_archive_id to None or re-raise
+        
+            return {
+                'archive_path': self.archive_path,
+                'archive_checksum': self.archive_checksum,
+                'archive_id': self.current_archive_id
+            }
             
         except Exception as e:
             logger.error(f"Error creating archive: {e}")
