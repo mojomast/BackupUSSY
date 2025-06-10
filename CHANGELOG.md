@@ -14,6 +14,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Incremental backup support
 - Network tape library integration
 
+## [0.1.2] - 2025-06-10
+
+### Fixed - Critical Bug Fixes
+- **ArchiveMode Import Error**: Fixed missing import causing "name 'ArchiveMode' is not defined" error
+- **Database Method Call**: Fixed get_library_statistics to get_database_stats method call
+- **Archive Job Stability**: Resolved archive creation failures due to import issues
+- **GUI Reliability**: Improved application startup and archive job execution
+
+### Technical Improvements
+- Added proper ArchiveMode enum import in gui.py
+- Corrected database manager method calls for statistics
+- Enhanced error handling for missing imports
+- Verified all manager initializations work correctly
+
+### User Experience
+- Archive jobs now start without import errors
+- Statistics display correctly in management tab
+- Improved application stability during operation
+- Better error reporting for troubleshooting
+
 ## [0.1.1] - 2025-06-10
 
 ### Fixed - Tape Device Detection

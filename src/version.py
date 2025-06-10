@@ -5,7 +5,7 @@ BackupUSSY Version Information
 
 # Application Information
 APP_NAME = "BackupUSSY"
-APP_VERSION = "0.1"
+APP_VERSION = "0.1.2"
 APP_DESCRIPTION = "Professional LTO Tape Archive Tool"
 APP_AUTHOR = "Kyle Durepos"
 APP_COPYRIGHT = "© 2025 Kyle Durepos"

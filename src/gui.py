@@ -18,7 +18,7 @@ except ImportError:
 
 from version import *
 from main import DependencyManager
-from archive_manager import ArchiveManager
+from archive_manager import ArchiveManager, ArchiveMode
 from tape_manager import TapeManager
 from logger_manager import LoggerManager
 from database_manager import DatabaseManager
@@ -885,7 +885,7 @@ class LTOArchiveGUI:
     def update_management_stats(self):
         """Update management tab statistics."""
         try:
-            stats = self.db_manager.get_library_statistics()
+            stats = self.db_manager.get_database_stats()
             self.window['-STAT_TOTAL_TAPES-'].update(str(stats.get('total_tapes', 0)))
             self.window['-STAT_ACTIVE_TAPES-'].update(str(stats.get('active_tapes', 0)))
             self.window['-STAT_TOTAL_ARCHIVES-'].update(str(stats.get('total_archives', 0)))
@@ -910,7 +910,7 @@ class LTOArchiveGUI:
         config = {
             'folder': folder_path,
             'device': values['-DEVICE-'],
-            'mode': 'stream' if values['-STREAM-'] else 'cached',
+            'mode': ArchiveMode.STREAM if values['-STREAM-'] else ArchiveMode.CACHED,
             'copies': 2 if values['-COPY2-'] else 1,
             'compression': values['-COMPRESS-'],
             'index_files': values['-INDEX_FILES-'],
