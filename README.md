@@ -12,6 +12,9 @@
 
 [![Download Latest Release](https://img.shields.io/badge/Download-Latest%20Release-brightgreen?style=for-the-badge&logo=github)](https://github.com/mojomast/backupussy/releases/latest)
 
+**🎉 Version 0.1: First Official Release**
+*Previous v1.0.x were development builds leading to this stable release*
+
 **🎉 NEW: Standalone Edition - Extract and Run!**
 
 </div>
