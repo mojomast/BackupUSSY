@@ -89,8 +89,31 @@ coverage.xml
 *.cover
 .hypothesis/
 
+# Development and build scripts (not for release)
+*.ps1
+plan*.md
+install.bat
+run.bat
+run_with_msys2.bat
+create_standalone.ps1
+debug_app.ps1
+package_release.ps1
+run_with_msys2.ps1
+
+# MSYS2 related files (standalone doesn't need these)
+msys2/
+msys2-*/
+install.ps1
+launch.ps1
+
+# PyInstaller specific
+*.spec
+build/
+dist/
+
 # Release packaging
 releases/
-dist/
-build/
+BackupUSSY-standalone-*/
+BackupUSSY-v*.zip
+BackupUSSY-*.zip
 
