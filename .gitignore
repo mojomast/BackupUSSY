@@ -117,3 +117,6 @@ BackupUSSY-standalone-*/
 BackupUSSY-v*.zip
 BackupUSSY-*.zip
 
+# GitHub Actions (not needed for this project)
+.github/
+
