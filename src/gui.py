@@ -620,19 +620,104 @@ class LTOArchiveGUI:
 
     def run_archive_job(self, config):
         """Run the archive job (called in separate thread)."""
+        job_result_for_event_loop = {
+            'success': False,
+            'error_message': 'Unknown error',
+            'archive_id': config.get('archive_id'),
+            'files_processed': 0,
+            'bytes_written': 0,
+            'mode': config.get('mode'),
+            'tape_name': config.get('tape_name')
+        }
+        
         try:
-            # Original complex logic of run_archive_job will be restored here later.
-            # For now, 'pass' to test the structure. 'config' is an argument.
-            # 'job_result_for_event_loop' would be defined by the actual job logic.
-            pass
+            self.logger.info(f"Starting archive job for folder: {config['folder_path']}")
+            
+            # Update progress
+            self.update_progress(5, "Validating source folder...")
+            
+            # Validate source folder
+            is_valid, message = self.archive_manager.validate_source_folder(config['folder_path'])
+            if not is_valid:
+                raise RuntimeError(f"Source folder validation failed: {message}")
+            
+            self.update_progress(10, "Preparing archive...")
+            
+            # Determine archive mode
+            archive_mode = config.get('archive_mode', ArchiveMode.CACHED)
+            
+            if archive_mode == ArchiveMode.CACHED:
+                # Cached mode: create archive file first
+                self.logger.info("Using cached archive mode")
+                
+                def progress_callback(message):
+                    self.update_progress(None, f"Creating archive: {message}")
+                
+                archive_result = self.archive_manager.create_cached_archive(
+                    folder_path=config['folder_path'],
+                    compression=config.get('compression', False),
+                    progress_callback=progress_callback,
+                    tape_label=config.get('tape_label', 'Unknown'),
+                    tape_device=config.get('device', '\\\\.\\\\Tape0'),
+                    index_files=True
+                )
+                
+                self.update_progress(60, "Writing archive to tape...")
+                
+                # Write to tape
+                success, bytes_written = self.tape_manager.write_archive_to_tape(
+                    archive_result['archive_path'],
+                    device=config.get('device', '\\\\.\\\\Tape0'),
+                    progress_callback=lambda info: self.update_progress(
+                        None, f"Writing to tape: {info.get('status', '')}")
+                )
+                
+                if not success:
+                    raise RuntimeError("Failed to write archive to tape")
+                
+                job_result_for_event_loop = {
+                    'success': True,
+                    'archive_id': archive_result.get('archive_id'),
+                    'files_processed': archive_result.get('files_processed', 0),
+                    'bytes_written': bytes_written,
+                    'mode': config.get('mode'),
+                    'tape_name': config.get('tape_name')
+                }
+                
+            elif archive_mode == ArchiveMode.STREAM:
+                # Stream mode: stream directly to tape
+                self.logger.info("Using stream archive mode")
+                
+                def progress_callback(info):
+                    self.update_progress(None, f"Streaming to tape: {info.get('status', '')}")
+                
+                stream_result = self.tape_manager.stream_to_tape(
+                    folder_path=config['folder_path'],
+                    device=config.get('device', '\\\\.\\\\Tape0'),
+                    compression=config.get('compression', False),
+                    progress_callback=progress_callback
+                )
+                
+                if not stream_result['success']:
+                    raise RuntimeError(f"Stream operation failed: {stream_result.get('error_message', 'Unknown error')}")
+                
+                job_result_for_event_loop = {
+                    'success': True,
+                    'archive_id': None,  # Stream mode doesn't have archive_id
+                    'files_processed': stream_result.get('files_processed', 0),
+                    'bytes_written': stream_result.get('bytes_written', 0),
+                    'mode': config.get('mode'),
+                    'tape_name': config.get('tape_name')
+                }
+            
+            self.update_progress(100, "Archive job completed successfully!")
+            self.logger.info("Archive job completed successfully")
         except Exception as e:
-            if hasattr(self, 'logger') and self.logger:
-                self.logger.error(
-                    f"Error in run_archive_job's try block: {e}", exc_info=True)
-            # Define job_result_for_event_loop for the finally clause on error
+            error_msg = str(e)
+            self.logger.error(f"Archive job failed: {error_msg}", exc_info=True)
             job_result_for_event_loop = {
                 'success': False,
-                'error_message': str(e),
+                'error_message': error_msg,
                 'archive_id': config.get('archive_id'),
                 'files_processed': 0,
                 'bytes_written': 0,
