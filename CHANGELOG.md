@@ -14,9 +14,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Incremental backup support
 - Network tape library integration
 
+## [0.1.1] - 2025-06-10
+
+### Fixed - Tape Device Detection
+- **Enhanced Detection**: Added WMI-based tape device discovery
+- **Better Fallbacks**: Improved device access testing methods
+- **Permission Handling**: Better support for devices requiring elevated access
+- **Debug Tools**: Added debug_tape_devices.py for troubleshooting
+- **Reliability**: Always includes common tape devices (Tape0-Tape3) as options
+
+### Technical Improvements
+- Added WMI dependency for proper Windows device enumeration
+- Improved error handling in tape_manager.py
+- Enhanced device detection logging and feedback
+- Better win32file integration for device testing
+
+### User Experience
+- Device dropdown now always shows tape options
+- "Refresh Devices" button works more reliably
+- Manual device selection more robust
+- Better error messages for device access issues
+
 ## [0.1] - 2025-06-10
 
-### Added - Standalone Edition
+### Added - First Official Release
 - **FreeSimpleGUI Interface**: Modern tabbed interface with professional design
 - **Bundled Dependencies**: dd.exe, tar.exe, gzip.exe included (no external installs)
 - **Zero-Setup Distribution**: Extract and run - no installation required

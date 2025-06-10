@@ -1,8 +1,8 @@
-# 📼 BackupUSSY v0.1 - Professional LTO Tape Archive Tool
+# 📼 BackupUSSY v0.1.1 - Professional LTO Tape Archive Tool
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-0.1-brightgreen.svg)
+![Version](https://img.shields.io/badge/version-0.1.1-brightgreen.svg)
 ![Platform](https://img.shields.io/badge/platform-windows-lightgrey.svg)
 ![FreeSimpleGUI](https://img.shields.io/badge/FreeSimpleGUI-5.2.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
@@ -61,7 +61,7 @@ BackupUSSY is a comprehensive LTO tape archive solution designed for Windows env
 [![Download Latest Release](https://img.shields.io/github/release/mojomast/backupussy.svg?style=flat-square)](https://github.com/mojomast/backupussy/releases/latest)
 
 1. Go to [Releases](https://github.com/mojomast/backupussy/releases)
-2. Download `BackupUSSY-standalone-v0.1.zip`
+2. Download `BackupUSSY-standalone-v0.1.1.zip`
 3. Extract to any location (e.g., `C:\BackupUSSY`)
 4. **That's it!** Double-click `Launch-BackupUSSY.bat`
 
@@ -103,7 +103,7 @@ python src/database_init.py
 ### Standalone Version (Zero-Setup)
 
 **Download and Run:**
-1. Download `BackupUSSY-standalone-v0.1.zip` from [releases](https://github.com/mojomast/backupussy/releases)
+1. Download `BackupUSSY-standalone-v0.1.1.zip` from [releases](https://github.com/mojomast/backupussy/releases)
 2. Extract anywhere you want
 3. Double-click `Launch-BackupUSSY.bat`
 4. **Done!** BackupUSSY is ready to use
@@ -383,6 +383,12 @@ For support, bug reports, or feature requests:
 This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## 🏷️ Version History
+
+### **v0.1.1** - Improved Tape Detection
+- **Enhanced Tape Detection**: WMI-based device discovery for better compatibility
+- **Improved Reliability**: Better device access fallbacks and error handling
+- **Debug Tools**: Added diagnostic utilities for troubleshooting
+- **User Experience**: More robust device selection and refresh functionality
 
 ### **v0.1** - Initial Release
 - Complete standalone application (no Python required)
