@@ -75,7 +75,10 @@ BackupUSSY is a comprehensive LTO tape archive solution designed for Windows env
 ```bash
 git clone https://github.com/mojomast/backupussy.git
 cd backupussy
-.\install.ps1
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+python src/database_init.py
 ```
 
 ## 📋 System Requirements
@@ -156,19 +159,17 @@ python src/test_runner.py
 
 ### Starting the Application
 
-**Quick Launch:**
-```cmd
-run.bat
-```
+**Standalone Version:**
+- Extract the downloaded zip file
+- Run `BackupUSSY.exe` directly
 
-**Command Line:**
+**Source Version:**
 ```bash
-.venv\Scripts\python.exe src\gui.py
-```
+# Activate virtual environment
+.venv\Scripts\activate
 
-**PowerShell Launcher:**
-```powershell
-.\launch.ps1
+# Run the application
+python src/gui.py
 ```
 
 ### Creating Archives
@@ -217,17 +218,10 @@ run.bat
 
 ```
 backupussy/
-├── 🎯 INSTALLATION & LAUNCH
-│   ├── install.ps1              # Full automated installer
-│   ├── install.bat              # Basic Python setup
-│   ├── launch.ps1               # PowerShell launcher
-│   ├── run.bat                  # Quick launch script
-│   └── validate_phase2.ps1      # Installation validator
-│
 ├── 💻 APPLICATION SOURCE
 │   └── src/
-│       ├── main.py              # Dependency management
 │       ├── gui.py               # Main GUI application
+│       ├── main.py              # Entry point and dependency management
 │       ├── archive_manager.py   # Archive creation logic
 │       ├── tape_manager.py      # Tape operations
 │       ├── logger_manager.py    # Logging system
@@ -239,24 +233,26 @@ backupussy/
 │       ├── tape_library.py      # Tape library management
 │       ├── database_init.py     # Database initialization
 │       ├── test_runner.py       # Comprehensive test suite
-│       └── test_recovery.py     # Recovery system tests
-│
-├── 📊 DATA & LOGS
-│   ├── logs/
-│   │   ├── archive_log.csv      # Cumulative job log
-│   │   └── job_*.log            # Individual job logs
-│   └── database/
-│       └── archives.db          # SQLite archive database
+│       ├── test_recovery.py     # Recovery system tests
+│       └── version.py           # Version information
 │
 ├── 📋 DOCUMENTATION
 │   ├── README.md                # This comprehensive guide
-│   ├── COMPLETED.md             # Development completion status
-│   ├── plan.md                  # Original development plan
-│   ├── plan2.md                 # Enhanced feature plan
+│   ├── CHANGELOG.md             # Version history and changes
+│   ├── CONTRIBUTING.md          # Contribution guidelines
 │   └── requirements.txt         # Python dependencies
 │
-└── 🔧 CONFIGURATION
-    └── .venv/                   # Python virtual environment
+├── 🔧 CONFIGURATION
+│   ├── .gitignore               # Git ignore rules
+│   ├── LICENSE                  # MIT license
+│   └── .github/workflows/       # CI/CD automation
+│
+└── 📊 RUNTIME DATA (created on first run)
+    ├── logs/
+    │   ├── archive_log.csv      # Cumulative job log
+    │   └── job_*.log            # Individual job logs
+    └── data/
+        └── archives.db          # SQLite archive database
 ```
 
 ## 📊 Logging & Monitoring
@@ -306,10 +302,10 @@ python src/advanced_search.py --pattern "*.pdf" --date-after 2024-01-01
 
 ### Common Issues
 
-**"Dependencies missing" Error**
+**"Dependencies missing" Error (Source version only)**
 - Run `tar --version` and `dd --version` to verify tools
 - Install MSYS2 or ensure tools are in PATH
-- Re-run installer with Administrator privileges
+- For standalone version: Extract fresh copy from release zip
 
 **"Tape device not accessible" Error**
 - Verify tape drive power and connections
@@ -336,12 +332,7 @@ python src/advanced_search.py --pattern "*.pdf" --date-after 2024-01-01
 python src/test_runner.py --verbose
 ```
 
-**Validate Installation:**
-```powershell
-.\validate_phase2.ps1
-```
-
-**Check System Status:**
+**Check System Status (Source version):**
 ```bash
 python src/main.py --check-deps
 ```
