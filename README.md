@@ -1,8 +1,8 @@
-# 📼 BackupUSSY v0.1.4 - Professional LTO Tape Archive Tool
+# 📼 BackupUSSY v0.1.5 - Professional LTO Tape Archive Tool
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-0.1.4-brightgreen.svg)
+![Version](https://img.shields.io/badge/version-0.1.5-brightgreen.svg)
 ![Platform](https://img.shields.io/badge/platform-windows-lightgrey.svg)
 ![FreeSimpleGUI](https://img.shields.io/badge/FreeSimpleGUI-5.2.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
@@ -61,7 +61,7 @@ BackupUSSY is a comprehensive LTO tape archive solution designed for Windows env
 [![Download Latest Release](https://img.shields.io/github/release/mojomast/backupussy.svg?style=flat-square)](https://github.com/mojomast/backupussy/releases/latest)
 
 1. Go to [Releases](https://github.com/mojomast/backupussy/releases)
-2. Download `BackupUSSY-standalone-v0.1.4.zip`
+2. Download `BackupUSSY-standalone-v0.1.5.zip`
 3. Extract to any location (e.g., `C:\BackupUSSY`)
 4. **That's it!** Double-click `Launch-BackupUSSY.bat`
 
@@ -383,6 +383,14 @@ For support, bug reports, or feature requests:
 This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## 🏷️ Version History
+
+### **v0.1.5** - Critical GUI Structure Fixes
+- **Application Startup**: Fixed "LTOArchiveGUI object has no attribute populate_recovery_tapes" error that prevented startup
+- **Method Structure**: Fixed all standalone functions to be proper class methods - resolved 50+ indentation issues
+- **Missing Methods**: Added all missing UI update methods for tabs (populate_recovery_tapes, populate_search_tapes, update_tape_list)
+- **Syntax Errors**: Resolved all syntax and indentation errors that prevented compilation
+- **UI Integration**: All tabs now have proper method implementations and error handling
+- **Application Stability**: Application now starts and runs without critical structural errors
 
 ### **v0.1.4** - Database & UI Critical Fixes
 - **Database Population Fix**: Fixed issue where database wasn't being populated when folders were stored on cassettes

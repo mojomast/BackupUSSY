@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5] - 2025-06-10
+
+### Fixed - Critical GUI Structure Issues
+- **Application Startup**: Fixed "LTOArchiveGUI object has no attribute populate_recovery_tapes" error
+- **Method Structure**: Fixed all standalone functions to be proper class methods
+- **Indentation Issues**: Corrected massive indentation problems throughout GUI file
+- **Missing Methods**: Added all missing UI update methods (populate_recovery_tapes, populate_search_tapes, update_tape_list)
+- **Class Hierarchy**: Fixed orphaned nested functions and broken method definitions
+- **Syntax Errors**: Resolved all syntax and indentation errors preventing compilation
+- **UI Integration**: All tabs now have proper method implementations
+- **Error Handling**: Enhanced error handling in all GUI methods
+
+### Technical Improvements
+- Systematic fix of 50+ improperly indented methods
+- Removal of duplicate and orphaned code blocks
+- Proper class method structure throughout GUI
+- Complete syntax validation and error resolution
+- Enhanced exception handling in all UI operations
+
+### User Experience
+- Application now starts without critical errors
+- All tabs (Archive, Recovery, Search, Management) functional
+- Proper UI updates after archive operations
+- Complete database integration with UI components
+- Real-time statistics and status updates working
+
 ## [0.1.4] - 2025-06-10
 
 ### Fixed - Critical Database and UI Issues

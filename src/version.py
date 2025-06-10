@@ -5,7 +5,7 @@ BackupUSSY Version Information
 
 # Application Information
 APP_NAME = "BackupUSSY"
-APP_VERSION = "0.1.4"
+APP_VERSION = "0.1.5"
 APP_DESCRIPTION = "Professional LTO Tape Archive Tool"
 APP_AUTHOR = "Kyle Durepos"
 APP_COPYRIGHT = "© 2025 Kyle Durepos"
@@ -13,7 +13,7 @@ APP_WEBSITE = "https://github.com/mojomast/backupussy"
 
 # Build Information
 APP_BUILD = "20250610"
-APP_CODENAME = "Database & UI Fixes"
+APP_CODENAME = "Critical GUI Fixes"
 
 # Full version string
 FULL_VERSION = f"{APP_NAME} v{APP_VERSION} ({APP_CODENAME})"

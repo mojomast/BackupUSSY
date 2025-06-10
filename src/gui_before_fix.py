@@ -598,25 +598,104 @@ class LTOArchiveGUI:
             [sg.Input(key='-ARCHIVE_NAME-', size=(70, 1))]
         ]
 
-        return layout
+        # Device and options
+        device_frame = [
+            [sg.Text('Tape device:'), sg.Combo([], key='-DEVICE-', size=(30, 1), readonly=True),
+             sg.Button('Refresh Devices', key='-REFRESH_DEVICES-')],
+            [sg.Text('Archive mode:'), sg.Combo(['Stream', 'Cached'],
+                     key='-MODE-', default_value='Cached', readonly=True)],
+            [sg.Text('Number of copies:'), sg.Combo(
+                [1, 2], key='-COPIES-', default_value=1, readonly=True)],
+            [sg.Checkbox('Enable compression (gzip)', key='-COMPRESSION-', default=True),
+             sg.Checkbox('Index files in database', key='-INDEX_FILES-', default=True)]
+        ]
+
+        # Progress and logging
+        progress_frame = [
+            [sg.Text('Progress:'), sg.ProgressBar(
+                100, key='-PROGRESS-', size=(40, 20))],
+            [sg.Text('Status:', size=(8, 1)), sg.Text(
+                'Ready', key='-STATUS-', size=(50, 1))],
+            [sg.Multiline(size=(80, 10), key='-LOG-',
+                          disabled=True, autoscroll=True)]
+        ]
+
+        # Control buttons
+        button_frame = [
+            [sg.Button('Start Archive', key='-START-', size=(12, 1)),
+             sg.Button('Cancel', key='-CANCEL-', size=(12, 1), disabled=True),
+             sg.Button('Exit', key='-EXIT-', size=(12, 1))]
+        ]
+
+        # Main layout
+        layout = [
+            [sg.Frame('Source Folder', folder_frame, expand_x=True)],
+            [sg.Frame('Tape Device', device_frame, expand_x=True)],
+            [sg.Frame('Archive Options', options_frame, expand_x=True)],
+            [sg.Frame('Progress', progress_frame, expand_x=True)],
+            [sg.Frame('Controls', button_frame, expand_x=True)]
+        ]
+
+        self.window = sg.Window(
+            MAIN_WINDOW_TITLE,
+            layout,
+            resizable=True,
+            finalize=True
+        )
+
         # Initial status update
-        self.refresh_devices()
-    
-    def refresh_devices(self):
-        """Refresh the list of available tape devices."""
-        try:
-            devices = self.tape_manager.detect_tape_devices()
-            if not devices:
-                devices = ['\\.\\Tape0']
-            if self.window and '-DEVICE-' in self.window.AllKeysDict:
-                current_value = self.window['-DEVICE-'].get()
-                self.window['-DEVICE-'].update(values=devices)
-                if current_value in devices:
-                    self.window['-DEVICE-'].update(value=current_value)
-                elif devices:
-                    self.window['-DEVICE-'].update(value=devices[0])
-        except Exception as e:
-            self.logger.error(f"Failed to refresh devices: {e}")
+        self.update_tape_status()
+
+        def update_tape_status(self):
+            """Update the tape device status display."""
+            try:
+                device = self.window['-DEVICE-'].get()
+                status = self.tape_manager.get_tape_status(device)
+                status_text = f"{status['status']}: {status['details'][:30]}..."
+                self.window['-TAPE_STATUS-'].update(status_text)
+            except Exception as e:
+                self.window['-TAPE_STATUS-'].update(f"Error: {str(e)[:30]}...")
+
+        def update_folder_size(self, folder_path):
+            """Update the estimated folder size display."""
+            try:
+                if folder_path and os.path.exists(folder_path):
+                    size, count = self.archive_manager.estimate_archive_size(
+                        folder_path)
+                    size_mb = size / (1024 * 1024)
+                    self.window['-SIZE-'].update(
+                        f"{size_mb:.1f} MB ({count} files)")
+                else:
+                    self.window['-SIZE-'].update("Not calculated")
+            except Exception as e:
+                self.window['-SIZE-'].update(f"Error: {e}")
+
+        def log_message(self, message):
+            """Add a message to the log display."""
+            timestamp = time.strftime('%H:%M:%S')
+            log_entry = f"[{timestamp}] {message}\n"
+            self.window['-LOG-'].print(log_entry, end='')
+
+        def update_progress(self, percent, status=""):
+            """Update the progress bar and status."""
+            self.window['-PROGRESS-'].update(percent)
+            if status:
+                self.window['-STATUS-'].update(status)
+
+        def start_archive_job(self, config):
+            """Start the archive job in a separate thread."""
+            # Pre-flight checks and duplicate detection
+            if not self.pre_archive_checks(config):
+                self.window['-START-'].update(disabled=False)
+                self.window['-CANCEL-'].update(disabled=True)
+                return
+
+            self.job_thread = threading.Thread(
+                target=self.run_archive_job,
+                args=(config,),
+                daemon=True
+            )
+            self.job_thread.start()
 
     def run_archive_job(self, config):
         """Run the archive job (called in separate thread)."""
@@ -874,7 +953,7 @@ class LTOArchiveGUI:
         self.window.close()
 
 
-    def handle_preview_files(self, folder_path):
+def handle_preview_files(self, folder_path):
         """Handle preview files button click."""
         if not folder_path:
             sg.popup_error('Error', 'Please select a source folder')
@@ -895,7 +974,7 @@ class LTOArchiveGUI:
             sg.popup_error('Preview Error', f'Failed to preview files: {e}')
 
 
-    def handle_recovery_tape_selection(self, tape_selection):
+def handle_recovery_tape_selection(self, tape_selection):
         """Handle recovery tape selection."""
         if not tape_selection:
             return
@@ -913,7 +992,7 @@ class LTOArchiveGUI:
             self.logger.error(f"Failed to load tape archives: {e}")
 
 
-    def handle_search(self, values):
+def handle_search(self, values):
         """Handle search button click."""
         query = values['-SEARCH_QUERY-'].strip()
         if not query:
@@ -936,90 +1015,95 @@ class LTOArchiveGUI:
             sg.popup_error('Search Error', f'Search failed: {e}')
 
 
-    def handle_advanced_search(self):
+def handle_advanced_search(self):
         """Handle advanced search button click."""
         try:
             adv_gui = AdvancedSearchGUI(self.db_manager, self.advanced_search)
             adv_gui.run_advanced_search_interface()
         except Exception as e:
-            sg.popup_error('Advanced Search Error', f'Failed to open advanced search: {e}')
+            sg.popup_error('Advanced Search Error',
+                           f'Failed to open advanced search: {e}')
 
 
-    def handle_browse_archives(self):
-        """Handle browse archives button click."""
-        try:
-            self.tape_browser.run_browser_interface()
-        except Exception as e:
-            sg.popup_error('Browser Error', f'Failed to open tape browser: {e}')
+def handle_browse_archives(self):
+    """Handle browse archives button click."""
+    try:
+        self.tape_browser.run_browser_interface()
+    except Exception as e:
+        sg.popup_error('Browser Error', f'Failed to open tape browser: {e}')
 
 
-    def update_tape_list(self):
-        """Update the tape list in all tabs after successful archiving operations."""
-        try:
-            tapes = self.db_manager.get_all_tapes()
-            
-            # Update main tape selection combo
-            tape_labels = [f"{tape['tape_label']} ({tape['tape_device']})" for tape in tapes]
-            if self.window and '-DEVICE-' in self.window.AllKeysDict:
-                current_value = self.window['-DEVICE-'].get()
-                self.window['-DEVICE-'].update(values=tape_labels)
-                # Try to maintain current selection if it still exists
-                if current_value in tape_labels:
-                    self.window['-DEVICE-'].update(value=current_value)
-                elif tape_labels:
-                    self.window['-DEVICE-'].update(value=tape_labels[0])
-            
-            # Update management tab tape list
-            if self.window and '-MANAGEMENT_TAPES_TABLE-' in self.window.AllKeysDict:
-                tape_data = [[tape['id'], tape['tape_label'], tape['tape_device'], tape.get(
-                    'barcode', 'N/A'), tape.get('last_used', 'N/A'), tape.get('archive_count', 0)] for tape in tapes]
-                self.window['-MANAGEMENT_TAPES_TABLE-'].update(values=tape_data)
-            
-            # Update statistics
-            self.update_statistics()
-            
-            self.logger.info(f"Updated tape list with {len(tapes)} tapes")
-            
-        except Exception as e:
-            self.logger.error(f"Failed to update tape list: {e}", exc_info=True)
+def update_tape_list(self):
+    """Update the tape list in all tabs after successful archiving operations."""
+    try:
+        tapes = self.db_manager.get_all_tapes()
+
+        # Update main tape selection combo
+        tape_labels = [
+            f"{tape['tape_label']} ({tape['tape_device']})" for tape in tapes]
+        if self.window and '-DEVICE-' in self.window.AllKeysDict:
+            current_value = self.window['-DEVICE-'].get()
+            self.window['-DEVICE-'].update(values=tape_labels)
+            # Try to maintain current selection if it still exists
+            if current_value in tape_labels:
+                self.window['-DEVICE-'].update(value=current_value)
+            elif tape_labels:
+                self.window['-DEVICE-'].update(value=tape_labels[0])
+
+        # Update management tab tape list
+        if self.window and '-MANAGEMENT_TAPES_TABLE-' in self.window.AllKeysDict:
+            tape_data = [[tape['id'], tape['tape_label'], tape['tape_device'], tape.get(
+                'barcode', 'N/A'), tape.get('last_used', 'N/A'), tape.get('archive_count', 0)] for tape in tapes]
+            self.window['-MANAGEMENT_TAPES_TABLE-'].update(values=tape_data)
+
+        # Update statistics
+        self.update_statistics()
+
+        logger.info(f"Updated tape list with {len(tapes)} tapes")
+
+    except Exception as e:
+        logger.error(f"Failed to update tape list: {e}", exc_info=True)
 
 
-    def populate_recovery_tapes(self):
-        """Populate tape list in recovery tab."""
-        try:
-            if not self.window:
-                return
-                
-            tapes = self.db_manager.get_all_tapes()
-            tape_options = [f"{tape['tape_label']} - {tape.get('archive_count', 0)} archives" for tape in tapes]
-            
-            if '-RECOVERY_TAPE-' in self.window.AllKeysDict:
-                self.window['-RECOVERY_TAPE-'].update(values=tape_options)
-                if tape_options:
-                    self.window['-RECOVERY_TAPE-'].update(value=tape_options[0])
-            
-            self.logger.info(f"Populated recovery tapes with {len(tapes)} options")
-            
-        except Exception as e:
-            self.logger.error(f"Failed to populate recovery tapes: {e}", exc_info=True)
+def populate_recovery_tapes(self):
+    """Populate tape list in recovery tab."""
+    try:
+        if not self.window:
+            return
+
+        tapes = self.db_manager.get_all_tapes()
+        tape_options = [
+            f"{tape['tape_label']} - {tape.get('archive_count', 0)} archives" for tape in tapes]
+
+        if '-RECOVERY_TAPE-' in self.window.AllKeysDict:
+            self.window['-RECOVERY_TAPE-'].update(values=tape_options)
+            if tape_options:
+                self.window['-RECOVERY_TAPE-'].update(value=tape_options[0])
+
+        logger.info(f"Populated recovery tapes with {len(tapes)} options")
+
+    except Exception as e:
+        logger.error(f"Failed to populate recovery tapes: {e}", exc_info=True)
 
     def populate_search_tapes(self):
         """Populate tape list in search tab."""
         try:
             if not self.window:
                 return
-                
+
             tapes = self.db_manager.get_all_tapes()
-            tape_options = ['All Tapes'] + [f"{tape['tape_label']}" for tape in tapes]
-            
+            tape_options = ['All Tapes'] + \
+                [f"{tape['tape_label']}" for tape in tapes]
+
             if '-SEARCH_TAPE-' in self.window.AllKeysDict:
                 self.window['-SEARCH_TAPE-'].update(values=tape_options)
                 self.window['-SEARCH_TAPE-'].update(value='All Tapes')
-            
-            self.logger.info(f"Populated search tapes with {len(tapes)} options")
-            
+
+            logger.info(f"Populated search tapes with {len(tapes)} options")
+
         except Exception as e:
-            self.logger.error(f"Failed to populate search tapes: {e}", exc_info=True)
+            logger.error(
+                f"Failed to populate search tapes: {e}", exc_info=True)
 
     def update_statistics(self):
         """Update the statistics display."""
@@ -1037,13 +1121,11 @@ Data: {total_data_gb:.1f} GB
 Active: {stats.get('active_tapes', 0)}"""
 
             self.window['-STATS-'].update(stats_text)
-            self.logger.info(
+            logger.info(
                 f"Updated statistics: {stats['total_tapes']} tapes, {stats['total_archives']} archives, {stats['total_files']} files")
-            
+
         except Exception as e:
-            self.logger.error(f"Failed to update statistics: {e}", exc_info=True)
-    
-    def update_management_tape_list(self):
+            logger.error(f"Failed to update statistics: {e}", exc_info=True)
         """Update the tape list in management tab."""
         try:
             tapes = self.db_manager.get_all_tapes()
@@ -1071,8 +1153,8 @@ Active: {stats.get('active_tapes', 0)}"""
 
 
     def handle_add_tape(self):
-        """Handle add tape button click."""
-        layout = [
+            """Handle add tape button click."""
+            layout = [
                 [sg.Text('Add New Tape to Library')],
                 [sg.Text('Tape Label:', size=(12, 1)), sg.Input(
                     key='-NEW_TAPE_LABEL-', size=(20, 1))],
@@ -1080,33 +1162,34 @@ Active: {stats.get('active_tapes', 0)}"""
                     key='-NEW_TAPE_DEVICE-', size=(20, 1))],
                 [sg.Text('Notes:', size=(12, 1))],
                 [sg.Multiline(key='-NEW_TAPE_NOTES-', size=(40, 3))],
-            [sg.Button('Add Tape', key='-ADD_NEW_TAPE-'),
-             sg.Button('Cancel', key='-CANCEL_ADD-')]
-        ]
-        
-        add_window = sg.Window('Add Tape', layout, modal=True)
-        
-        while True:
-            event, values = add_window.read()
-            
-            if event in (sg.WIN_CLOSED, '-CANCEL_ADD-'):
-                break
-            elif event == '-ADD_NEW_TAPE-':
-                try:
-                    tape_id = self.db_manager.add_tape(
-                        tape_label=values['-NEW_TAPE_LABEL-'],
-                        device=values['-NEW_TAPE_DEVICE-'],
-                        notes=values['-NEW_TAPE_NOTES-']
-                    )
-                    sg.popup(f'Tape added successfully with ID: {tape_id}')
-                    self.update_tape_list()
-                    self.populate_recovery_tapes()
-                    self.populate_search_tapes()
-                    break
-                except Exception as e:
-                    sg.popup_error('Add Tape Error', f'Failed to add tape: {e}')
+                [sg.Button('Add Tape', key='-ADD_NEW_TAPE-'),
+                           sg.Button('Cancel', key='-CANCEL_ADD-')]
+            ]
 
-        add_window.close()
+            add_window = sg.Window('Add Tape', layout, modal=True)
+
+            while True:
+                event, values = add_window.read()
+
+                if event in (sg.WIN_CLOSED, '-CANCEL_ADD-'):
+                    break
+                elif event == '-ADD_NEW_TAPE-':
+                    try:
+                        tape_id = self.db_manager.add_tape(
+                            tape_label=values['-NEW_TAPE_LABEL-'],
+                            device=values['-NEW_TAPE_DEVICE-'],
+                            notes=values['-NEW_TAPE_NOTES-']
+                        )
+                        sg.popup(f'Tape added successfully with ID: {tape_id}')
+                        self.update_tape_list()
+                        self.populate_recovery_tapes()
+                        self.populate_search_tapes()
+                        break
+                    except Exception as e:
+                        sg.popup_error('Add Tape Error',
+                                       f'Failed to add tape: {e}')
+
+            add_window.close()
 
     def handle_db_maintenance(self):
         """Handle database maintenance button click."""
@@ -1314,22 +1397,21 @@ Active: {stats.get('active_tapes', 0)}"""
         except Exception as e:
             self.logger.error(f"Tape selection error: {e}")
 
-    def handle_search_recover(self, values):
-        """Handle recover selected files from search."""
-        try:
-            # TODO: Implement search recovery functionality
-            pass
-        except Exception as e:
+def handle_search_recover(self, values):
+    """Handle recover selected files from search."""
+    try:
+        pass
+    except Exception as e:
             sg.popup_error('Recovery Error', f'Search recovery failed: {e}')
 
-    def handle_search_show_archive(self, values):
-        """Handle show selected file in archive browser."""
-        try:
-            selected_rows = values['-SEARCH_RESULTS-']
-            if not selected_rows:
-                sg.popup('Please select a file first')
-                return
-            
+def handle_search_show_archive(self, values):
+    """Handle show selected file in archive browser."""
+    try:
+        selected_rows = values['-SEARCH_RESULTS-']
+        if not selected_rows:
+            sg.popup('Please select a file first')
+            return
+        else:
             all_results_metadata = self.window['-SEARCH_RESULTS-'].metadata
             if all_results_metadata is None:
                 self.logger.error("Search results table metadata is missing.")
@@ -1360,18 +1442,18 @@ Active: {stats.get('active_tapes', 0)}"""
 
             # Open tape browser and navigate to archive
             self.tape_browser.run_browser_interface(archive_name)
-        except Exception as e:
-            self.logger.error(f"Error in handle_search_show_archive: {e}")
-            sg.popup_error('Browser Error', f'Failed to show archive: {e}')
+    except Exception as e:
+        self.logger.error(f"Error in handle_search_show_archive: {e}")
+        sg.popup_error('Browser Error', f'Failed to show archive: {e}')
 
-    def handle_search_export(self):
-        """Handle export search results."""
-        try:
-            table_data = self.window['-SEARCH_RESULTS-'].get()
-            if not table_data:
-                sg.popup('No search results to export')
-                return
-            
+def handle_search_export(self):
+    """Handle export search results."""
+    try:
+        table_data = self.window['-SEARCH_RESULTS-'].get()
+        if not table_data:
+            sg.popup('No search results to export')
+            return
+        else:
             export_path = sg.popup_get_file(
                 'Save Export As',
                 save_as=True,
@@ -1385,175 +1467,174 @@ Active: {stats.get('active_tapes', 0)}"""
             # Assuming self.search_interface.export_search_results exists and handles the data
             self.search_interface.export_search_results(table_data, export_path)
             sg.popup(f'Search results exported to: {export_path}')
-        except Exception as e:
-            self.logger.error(f"Error during search results export: {e}")
-            sg.popup_error('Export Error', f'Failed to export results: {e}')
+    except Exception as e:
+        self.logger.error(f"Error during search results export: {e}")
+        sg.popup_error('Export Error', f'Failed to export results: {e}')
 
-    def handle_search_clear(self):
-        """Handle clear search results."""
-        self.window['-SEARCH_RESULTS-'].update(values=[])
-        self.window['-SEARCH_DETAILS-'].update('')
-        self.window['-SEARCH_COUNT-'].update('0 files found')
-        self.window['-SEARCH_RECOVER-'].update(disabled=True)
-        self.window['-SEARCH_SHOW_ARCHIVE-'].update(disabled=True)
+def handle_search_clear(self):
+    """Handle clear search results."""
+    self.window['-SEARCH_RESULTS-'].update(values=[])
+    self.window['-SEARCH_DETAILS-'].update('')
+    self.window['-SEARCH_COUNT-'].update('0 files found')
+    self.window['-SEARCH_RECOVER-'].update(disabled=True)
+    self.window['-SEARCH_SHOW_ARCHIVE-'].update(disabled=True)
 
-    def handle_tape_selection(self, selection):
-        """Handle tape selection in management tab."""
-        try:
-            if selection:
-                table_data = self.window['-TAPE_LIST-'].get()
-                if selection and len(table_data) > selection[0]:
-                    # TODO: Add logic here if something specific needs to happen
-                    # when a valid row is selected and data exists.
-                    # For now, just pass.
-                    pass
-                
-                # Enable management buttons
-                self.window['-EDIT_TAPE-'].update(disabled=False)
-                self.window['-DELETE_TAPE-'].update(disabled=False)
-                self.window['-BROWSE_TAPE-'].update(disabled=False)
-            else: # Handle no selection or invalid selection
-                self.window['-EDIT_TAPE-'].update(disabled=True)
-                self.window['-DELETE_TAPE-'].update(disabled=True)
-                self.window['-BROWSE_TAPE-'].update(disabled=True)
-                
-        except Exception as e:
-            self.logger.error(f"Tape selection error: {e}")
-
-    def handle_edit_tape(self, values):
-        """Handle edit tape button click."""
-        try:
-            selected_rows = values['-TAPE_LIST-']
-            if not selected_rows:
-                sg.popup('Please select a tape to edit')
-                return
-            
+def handle_tape_selection(self, selection):
+    """Handle tape selection in management tab."""
+    try:
+        if selection:
             table_data = self.window['-TAPE_LIST-'].get()
-            tape_label = table_data[selected_rows[0]][0]
-            tape = self.db_manager.find_tape_by_label(tape_label)
+            if selection and len(table_data) > selection[0]:
+                # TODO: Add logic here if something specific needs to happen
+                # when a valid row is selected and data exists.
+                # For now, just pass.
+                pass
             
+            # Enable management buttons
+            self.window['-EDIT_TAPE-'].update(disabled=False)
+            self.window['-DELETE_TAPE-'].update(disabled=False)
+            self.window['-BROWSE_TAPE-'].update(disabled=False)
+        else: # Handle no selection or invalid selection
+            self.window['-EDIT_TAPE-'].update(disabled=True)
+            self.window['-DELETE_TAPE-'].update(disabled=True)
+            self.window['-BROWSE_TAPE-'].update(disabled=True)
+    except Exception as e:
+        self.logger.error(f"Tape selection error: {e}")
+
+def handle_edit_tape(self, values):
+    """Handle edit tape button click."""
+    try:
+        selected_rows = values['-TAPE_LIST-']
+        if not selected_rows:
+            sg.popup('Please select a tape to edit')
+            return
+        
+        table_data = self.window['-TAPE_LIST-'].get()
+        tape_label = table_data[selected_rows[0]][0]
+        tape = self.db_manager.find_tape_by_label(tape_label)
+        
+        if tape:
+            # Update tape in database
+            new_label = values['-TAPE_DETAIL_LABEL-']
+            new_status = values['-TAPE_DETAIL_STATUS-']
+            new_notes = values['-TAPE_DETAIL_NOTES-']
+            
+            self.db_manager.update_tape(
+                tape['tape_id'],
+                tape_label=new_label,
+                tape_status=new_status,
+                notes=new_notes
+            )
+            
+            sg.popup('Tape updated successfully')
+            self.update_tape_list()
+            self.populate_recovery_tapes()
+            self.populate_search_tapes()
+    except Exception as e:
+        sg.popup_error('Edit Error', f'Failed to edit tape: {e}')
+
+def handle_delete_tape(self, values):
+    """Handle delete tape button click."""
+    try:
+        selected_rows = values['-TAPE_LIST-']
+        if not selected_rows:
+            sg.popup('Please select a tape to delete')
+            return
+        
+        table_data = self.window['-TAPE_LIST-'].get()
+        tape_label = table_data[selected_rows[0]][0]
+        
+        # Confirm deletion
+        result = sg.popup_yes_no(
+            f'Are you sure you want to delete tape "{tape_label}"?\n'
+            'This will remove all associated archive and file records.',
+            title='Confirm Deletion'
+        )
+        
+        if result == 'Yes':
+            tape = self.db_manager.find_tape_by_label(tape_label)
             if tape:
-                # Update tape in database
-                new_label = values['-TAPE_DETAIL_LABEL-']
-                new_status = values['-TAPE_DETAIL_STATUS-']
-                new_notes = values['-TAPE_DETAIL_NOTES-']
-                
-                self.db_manager.update_tape(
-                    tape['tape_id'],
-                    tape_label=new_label,
-                    tape_status=new_status,
-                    notes=new_notes
-                )
-                
-                sg.popup('Tape updated successfully')
+                self.db_manager.delete_tape(tape['tape_id'])
+                sg.popup('Tape deleted successfully')
                 self.update_tape_list()
                 self.populate_recovery_tapes()
                 self.populate_search_tapes()
-        except Exception as e:
-            sg.popup_error('Edit Error', f'Failed to edit tape: {e}')
+                
+                # Clear details
+                self.window['-TAPE_DETAIL_LABEL-'].update('', disabled=True)
+                self.window['-TAPE_DETAIL_STATUS-'].update('', disabled=True)
+                self.window['-TAPE_DETAIL_NOTES-'].update('', disabled=True)
+                
+                # Disable buttons
+                self.window['-EDIT_TAPE-'].update(disabled=True)
+                self.window['-DELETE_TAPE-'].update(disabled=True)
+                self.window['-BROWSE_TAPE-'].update(disabled=True)
+    except Exception as e:
+        sg.popup_error('Delete Error', f'Failed to delete tape: {e}')
 
-    def handle_delete_tape(self, values):
-        """Handle delete tape button click."""
-        try:
-            selected_rows = values['-TAPE_LIST-']
-            if not selected_rows:
-                sg.popup('Please select a tape to delete')
-                return
+def handle_browse_tape(self, values):
+    """Handle browse tape button click."""
+    try:
+        selected_rows = values['-TAPE_LIST-']
+        if not selected_rows:
+            sg.popup('Please select a tape to browse')
+            return
+        
+        table_data = self.window['-TAPE_LIST-'].get()
+        tape_label = table_data[selected_rows[0]][0]
+        
+        # Open tape browser for specific tape
+        self.tape_browser.run_browser_interface(tape_filter=tape_label)
+    except Exception as e:
+        sg.popup_error('Browse Error', f'Failed to browse tape: {e}')
+
+def handle_export_inventory(self):
+    """Handle export inventory button click."""
+    try:
+        export_path = sg.popup_get_file(
+            'Export Tape Inventory',
+            save_as=True,
+            file_types=[('CSV Files', '*.csv'), ('JSON Files', '*.json')],
+            default_extension='.csv'
+        )
+        
+        if export_path:
+            if export_path.lower().endswith('.json'):
+                self.db_manager.export_inventory_json(export_path)
+            else:
+                self.db_manager.export_inventory_csv(export_path)
             
-            table_data = self.window['-TAPE_LIST-'].get()
-            tape_label = table_data[selected_rows[0]][0]
-            
-            # Confirm deletion
+            sg.popup(f'Inventory exported to: {export_path}')
+    except Exception as e:
+        sg.popup_error('Export Error', f'Failed to export inventory: {e}')
+
+def handle_import_data(self):
+    """Handle import data button click."""
+    try:
+        import_path = sg.popup_get_file(
+            'Import Data',
+            file_types=[('CSV Files', '*.csv'), ('JSON Files', '*.json')]
+        )
+        
+        if import_path:
             result = sg.popup_yes_no(
-                f'Are you sure you want to delete tape "{tape_label}"?\n'
-                'This will remove all associated archive and file records.',
-                title='Confirm Deletion'
+                f'Import data from {import_path}?\n'
+                'This may overwrite existing data.',
+                title='Confirm Import'
             )
             
             if result == 'Yes':
-                tape = self.db_manager.find_tape_by_label(tape_label)
-                if tape:
-                    self.db_manager.delete_tape(tape['tape_id'])
-                    sg.popup('Tape deleted successfully')
-                    self.update_tape_list()
-                    self.populate_recovery_tapes()
-                    self.populate_search_tapes()
-                    
-                    # Clear details
-                    self.window['-TAPE_DETAIL_LABEL-'].update('', disabled=True)
-                    self.window['-TAPE_DETAIL_STATUS-'].update('', disabled=True)
-                    self.window['-TAPE_DETAIL_NOTES-'].update('', disabled=True)
-                    
-                    # Disable buttons
-                    self.window['-EDIT_TAPE-'].update(disabled=True)
-                    self.window['-DELETE_TAPE-'].update(disabled=True)
-                    self.window['-BROWSE_TAPE-'].update(disabled=True)
-        except Exception as e:
-            sg.popup_error('Delete Error', f'Failed to delete tape: {e}')
-
-    def handle_browse_tape(self, values):
-        """Handle browse tape button click."""
-        try:
-            selected_rows = values['-TAPE_LIST-']
-            if not selected_rows:
-                sg.popup('Please select a tape to browse')
-                return
-            
-            table_data = self.window['-TAPE_LIST-'].get()
-            tape_label = table_data[selected_rows[0]][0]
-            
-            # Open tape browser for specific tape
-            self.tape_browser.run_browser_interface(tape_filter=tape_label)
-        except Exception as e:
-            sg.popup_error('Browse Error', f'Failed to browse tape: {e}')
-
-    def handle_export_inventory(self):
-        """Handle export inventory button click."""
-        try:
-            export_path = sg.popup_get_file(
-                'Export Tape Inventory',
-                save_as=True,
-                file_types=[('CSV Files', '*.csv'), ('JSON Files', '*.json')],
-                default_extension='.csv'
-            )
-            
-            if export_path:
-                if export_path.lower().endswith('.json'):
-                    self.db_manager.export_inventory_json(export_path)
+                if import_path.lower().endswith('.json'):
+                    records_imported = self.db_manager.import_inventory_json(import_path)
                 else:
-                    self.db_manager.export_inventory_csv(export_path)
+                    records_imported = self.db_manager.import_inventory_csv(import_path)
                 
-                sg.popup(f'Inventory exported to: {export_path}')
-        except Exception as e:
-            sg.popup_error('Export Error', f'Failed to export inventory: {e}')
-
-    def handle_import_data(self):
-        """Handle import data button click."""
-        try:
-            import_path = sg.popup_get_file(
-                'Import Data',
-                file_types=[('CSV Files', '*.csv'), ('JSON Files', '*.json')]
-            )
-            
-            if import_path:
-                result = sg.popup_yes_no(
-                    f'Import data from {import_path}?\n'
-                    'This may overwrite existing data.',
-                    title='Confirm Import'
-                )
-                
-                if result == 'Yes':
-                    if import_path.lower().endswith('.json'):
-                        records_imported = self.db_manager.import_inventory_json(import_path)
-                    else:
-                        records_imported = self.db_manager.import_inventory_csv(import_path)
-                    
-                    sg.popup(f'Successfully imported {records_imported} records')
-                    self.update_tape_list()
-                    self.populate_recovery_tapes()
-                    self.populate_search_tapes()
-        except Exception as e:
-            sg.popup_error('Import Error', f'Failed to import data: {e}')
+                sg.popup(f'Successfully imported {records_imported} records')
+                self.update_tape_list()
+                self.populate_recovery_tapes()
+                self.populate_search_tapes()
+    except Exception as e:
+        sg.popup_error('Import Error', f'Failed to import data: {e}')
 
 
 
