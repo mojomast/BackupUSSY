@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2025-06-09
+
+### Fixed
+- **GUI Structure**: Corrected indentation of various helper methods in `LTOArchiveGUI` (`src/gui.py`) to their proper class-level, significantly improving code structure and maintainability.
+- **GUI Logic**: Removed a duplicated code block within the `handle_import_data` method in `src/gui.py`, resolving a logical error and reducing redundancy.
+
+### Changed
+- **Core Managers**: Implemented general stability improvements and minor fixes in `src/archive_manager.py`, `src/database_manager.py`, and `src/tape_manager.py`.
+
+
 ### Planned
 - Web interface for remote management
 - Barcode label support

@@ -93,8 +93,15 @@ class DatabaseManager:
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_archives_date ON archives(archive_date)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_files_modified ON files(file_modified)")
                 
+                # Ensure 'status' column exists in 'archives' table
+                cursor.execute("PRAGMA table_info(archives)")
+                columns = [info[1] for info in cursor.fetchall()]
+                if 'status' not in columns:
+                    logger.info("Adding 'status' column to 'archives' table with default 'pending_creation'.")
+                    cursor.execute("ALTER TABLE archives ADD COLUMN status VARCHAR(50) DEFAULT 'pending_creation'")
+                
                 conn.commit()
-                logger.info("Database tables and indexes created successfully")
+                logger.info("Database tables, columns, and indexes verified/created successfully")
                 
         except sqlite3.Error as e:
             logger.error(f"Failed to initialize database: {e}")
@@ -135,22 +142,24 @@ class DatabaseManager:
             raise
     
     def add_archive(self, tape_id: int, archive_name: str, source_folder: str,
-                   archive_size_bytes: int, file_count: int, checksum: str,
-                   compression_used: bool = False, archive_position: int = 1) -> int:
+                   size_bytes: int, num_files: int, archive_checksum: str,
+                   compression_enabled: bool = False, archive_position: int = 1,
+                   status: str = "completed") -> Optional[int]:
         """Add a new archive to the database.
         
         Args:
             tape_id: ID of the tape containing this archive
             archive_name: Name of the archive file
             source_folder: Original folder path that was archived
-            archive_size_bytes: Size of the archive in bytes
-            file_count: Number of files in the archive
-            checksum: SHA256 checksum of the archive
-            compression_used: Whether compression was used
+            size_bytes: Size of the archive in bytes
+            num_files: Number of files in the archive
+            archive_checksum: SHA256 checksum of the archive
+            compression_enabled: Whether compression was used
             archive_position: Position on tape (for multi-archive tapes)
+            status: Status of the archive (e.g., 'completed', 'streaming_to_tape', 'failed')
             
         Returns:
-            archive_id of the newly created archive
+            archive_id of the newly created archive, or None on failure
         """
         try:
             with sqlite3.connect(self.db_path) as conn:
@@ -159,33 +168,44 @@ class DatabaseManager:
                 # Verify tape exists
                 cursor.execute("SELECT tape_id FROM tapes WHERE tape_id = ?", (tape_id,))
                 if not cursor.fetchone():
+                    logger.error(f"Tape ID {tape_id} does not exist. Cannot add archive.")
                     raise ValueError(f"Tape ID {tape_id} does not exist")
                 
                 now = datetime.now()
                 cursor.execute("""
                     INSERT INTO archives (tape_id, archive_name, source_folder, archive_date,
-                                        archive_size_bytes, file_count, checksum, compression_used, archive_position)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (tape_id, archive_name, source_folder, now, archive_size_bytes,
-                      file_count, checksum, compression_used, archive_position))
+                                        archive_size_bytes, file_count, checksum, compression_used, 
+                                        archive_position, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (tape_id, archive_name, source_folder, now, size_bytes,
+                      num_files, archive_checksum, compression_enabled, archive_position, status))
                 
                 archive_id = cursor.lastrowid
+                if archive_id is None:
+                    logger.error(f"Failed to get lastrowid after inserting archive {archive_name}.")
+                    return None
                 
-                # Update tape's last_written and total_size
-                cursor.execute("""
-                    UPDATE tapes 
-                    SET last_written = ?, total_size_bytes = total_size_bytes + ?
-                    WHERE tape_id = ?
-                """, (now, archive_size_bytes, tape_id))
+                # Update tape's last_written and total_size, but only if archive is 'completed'
+                # Other statuses like 'streaming_to_tape' might not contribute to final size yet.
+                if status == "completed":
+                    cursor.execute("""
+                        UPDATE tapes 
+                        SET last_written = ?, total_size_bytes = COALESCE(total_size_bytes, 0) + ?
+                        WHERE tape_id = ?
+                    """, (now, size_bytes, tape_id))
                 
                 conn.commit()
                 
-                logger.info(f"Added archive: {archive_name} (ID: {archive_id}) to tape {tape_id}")
+                logger.info(f"Added archive: {archive_name} (ID: {archive_id}, Status: {status}) to tape {tape_id}")
                 return archive_id
                 
         except sqlite3.Error as e:
-            logger.error(f"Failed to add archive: {e}")
-            raise
+            logger.error(f"Failed to add archive '{archive_name}': {e}", exc_info=True)
+            # Consider not re-raising to allow GUI to handle it, or re-raise a custom exception
+            return None # Return None on failure
+        except ValueError as e:
+            logger.error(f"ValueError while adding archive '{archive_name}': {e}", exc_info=True)
+            return None
     
     def add_files(self, archive_id: int, file_list: List[Dict[str, Any]]):
         """Add files to an archive in the database.
@@ -390,6 +410,96 @@ class DatabaseManager:
             logger.error(f"Failed to get archive details: {e}")
             raise
     
+    def update_archive_status(self, archive_id: int, status: str,
+                            new_checksum: Optional[str] = None,
+                            new_size_bytes: Optional[int] = None,
+                            new_num_files: Optional[int] = None) -> bool:
+        """Update an archive's status and optionally other details.
+
+        If the status is set to 'completed', this method will also update the
+        associated tape's last_written time and total_size_bytes using the
+        archive's size (either new_size_bytes if provided, or existing).
+
+        Args:
+            archive_id: ID of the archive to update.
+            status: New status for the archive (e.g., 'completed', 'failed', 'streaming_to_tape').
+            new_checksum: Optional new checksum for the archive.
+            new_size_bytes: Optional new size in bytes for the archive.
+            new_num_files: Optional new file count for the archive.
+
+        Returns:
+            True if the update was successful, False otherwise.
+        """
+        conn = None
+        try:
+            conn = sqlite3.connect(self.db_path)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            update_fields = ["status = ?"]
+            params: List[Any] = [status]
+
+            if new_checksum is not None:
+                update_fields.append("checksum = ?")
+                params.append(new_checksum)
+            if new_size_bytes is not None:
+                update_fields.append("archive_size_bytes = ?")
+                params.append(new_size_bytes)
+            if new_num_files is not None:
+                update_fields.append("file_count = ?")
+                params.append(new_num_files)
+
+            params.append(archive_id)
+            query = f"UPDATE archives SET {', '.join(update_fields)} WHERE archive_id = ?"
+            
+            cursor.execute(query, params)
+
+            if cursor.rowcount > 0:
+                logger.info(f"Archive {archive_id} updated: status='{status}'" +
+                            f"{', checksum updated' if new_checksum is not None else ''}" +
+                            f"{', size updated to ' + str(new_size_bytes) if new_size_bytes is not None else ''}" +
+                            f"{', file count updated to ' + str(new_num_files) if new_num_files is not None else ''}.")
+                
+                # If status is 'completed', update tape stats
+                if status == "completed":
+                    # Fetch tape_id and the definitive archive_size_bytes (which might have just been updated)
+                    cursor.execute("SELECT tape_id, archive_size_bytes FROM archives WHERE archive_id = ?", (archive_id,))
+                    archive_info = cursor.fetchone()
+                    
+                    if archive_info and archive_info['tape_id'] is not None:
+                        tape_id = archive_info['tape_id']
+                        # Use the archive_size_bytes from the table, which reflects new_size_bytes if it was provided
+                        size_for_tape_update = archive_info['archive_size_bytes'] if archive_info['archive_size_bytes'] is not None else 0
+                        
+                        conn.commit() # Commit archive update before calling another method that opens its own connection
+                        
+                        if not self.update_tape_write_completion(tape_id, size_for_tape_update):
+                            logger.error(f"Failed to update tape stats for tape_id {tape_id} after archive {archive_id} completion. Archive itself was updated.")
+                            # The archive update is committed, but tape update failed. This is a partial success.
+                        else:
+                            logger.info(f"Tape stats for tape_id {tape_id} updated successfully after archive {archive_id} completion.")
+                        return True # Archive update was successful
+                    else:
+                        logger.error(f"Could not retrieve tape_id or archive_size_bytes for archive {archive_id} to update tape stats after status change.")
+                        conn.commit() # Commit the archive update even if tape info retrieval fails
+                        return True # Archive update was successful, but tape update part had issues
+                else:
+                    conn.commit() # Commit changes for non-'completed' status updates
+                    return True
+            else:
+                logger.warning(f"No archive found with archive_id {archive_id}, or no changes specified/needed for update.")
+                # No need to commit if no rows affected, but also no harm if an implicit transaction was started.
+                # If an explicit transaction was started: conn.rollback()
+                return False
+
+        except sqlite3.Error as e:
+            logger.error(f"Database error updating archive {archive_id}: {e}")
+            # if conn: conn.rollback() # If explicit transaction was used
+            return False
+        finally:
+            if conn:
+                conn.close()
+
     def update_tape_status(self, tape_id: int, status: str, notes: Optional[str] = None):
         """Update tape status and notes.
         
@@ -514,7 +624,56 @@ class DatabaseManager:
             logger.error(f"Failed to find tape by label: {e}")
             raise
     
-    def backup_database(self, backup_path: Optional[str] = None) -> str:
+    def add_tape_if_not_exists(self, tape_label: str, device: str,
+                               tape_status: Optional[str] = None, 
+                               notes: Optional[str] = None) -> Optional[int]:
+        """Adds a tape if it doesn't exist by label, or returns existing tape_id.
+        If tape_status is provided, ensures the tape (new or existing) has this status.
+        If notes are provided, they are applied to new tapes or updated on existing tapes.
+
+        Returns:
+            The tape_id if successful, otherwise None.
+        """
+        logger.debug(f"Attempting to add_tape_if_not_exists: label='{tape_label}', device='{device}', status='{tape_status}', notes='{notes is not None}'")
+        existing_tape_info = self.find_tape_by_label(tape_label)
+
+        if existing_tape_info:
+            tape_id = existing_tape_info['tape_id']
+            logger.info(f"Tape '{tape_label}' already exists with ID {tape_id}.")
+            
+            # Check if status or notes need updating
+            needs_status_update = tape_status and existing_tape_info.get('tape_status') != tape_status
+            needs_notes_update = notes is not None and existing_tape_info.get('notes') != notes
+
+            if needs_status_update or needs_notes_update:
+                new_status = tape_status if needs_status_update else existing_tape_info.get('tape_status')
+                new_notes = notes if needs_notes_update else existing_tape_info.get('notes')
+                logger.info(f"Updating existing tape {tape_id}: status='{new_status}', notes provided='{notes is not None}'")
+                self.update_tape_status(tape_id, new_status, new_notes)
+            return tape_id
+        else:
+            logger.info(f"Tape '{tape_label}' not found. Creating new tape.")
+            try:
+                # add_tape creates tape with default status 'active' (from DDL) and sets created_date.
+                # It takes tape_label, device, notes.
+                new_tape_id = self.add_tape(tape_label, device, notes) 
+                if new_tape_id is None:
+                    logger.error(f"Failed to create new tape '{tape_label}' via add_tape method.")
+                    return None
+
+                # If a specific status is requested and it's different from the default 'active'
+                # (which is set by DDL and add_tape doesn't override unless explicitly coded to)
+                if tape_status and tape_status != 'active':
+                    logger.info(f"Setting status of new tape {new_tape_id} to '{tape_status}'. Notes already set by add_tape.")
+                    self.update_tape_status(new_tape_id, tape_status) # Notes are already set by add_tape
+                
+                logger.info(f"Successfully created new tape '{tape_label}' with ID {new_tape_id}.")
+                return new_tape_id
+            except Exception as e:
+                logger.error(f"Error creating new tape '{tape_label}' in add_tape_if_not_exists: {e}", exc_info=True)
+                return None
+    
+    def backup_database(self, backup_path: Optional[str] = None) -> Path:
         """Create a backup of the database.
         
         Args:

@@ -504,432 +504,529 @@ class LTOArchiveGUI:
         self.job_thread = threading.Thread(
             target=self.run_archive_job,
             args=(config,),
-            daemon=True
+            daemon=True  # Add daemon=True so thread exits when main app exits
         )
         self.job_thread.start()
-    
-    def run_archive_job(self, config):
-        """Run the archive job (called in separate thread)."""
-        try:
-            self.log_message("Starting archive job...")
+        self.current_job = self.job_thread # Or a more specific job object if available
+        # Update UI
+        self.window['-START-'].update(disabled=True)
+        self.window['-CANCEL-'].update(disabled=False)
+        self.window['-FOLDER-'].update(disabled=True) 
+        self.window['-DEVICE-'].update(disabled=True)
+        # Potentially disable other config options here
+        self.log_message(f"Archive job started for: {config.get('archive_name', 'Unnamed Archive')}")
             
-            folder_path = config['folder']
-            device = config['device']
-            mode = config['mode']
-            copies = config['copies']
-            compression = config['compression']
+            # Progress and logging
+            progress_frame = [
+                [sg.Text('Progress:'), sg.ProgressBar(100, key='-PROGRESS-', size=(40, 20))],
+                [sg.Text('Status:', size=(8, 1)), sg.Text('Ready', key='-STATUS-', size=(50, 1))],
+                [sg.Multiline(size=(80, 10), key='-LOG-', disabled=True, autoscroll=True)]
+            ]
             
-            # Progress callback
-            def progress_callback(data):
-                if isinstance(data, dict):
-                    if 'percent' in data:
-                        self.update_progress(data['percent'], data.get('status', ''))
-                    else:
-                        self.log_message(data.get('status', str(data)))
+            # Control buttons
+            button_frame = [
+                [sg.Button('Start Archive', key='-START-', size=(12, 1)),
+                 sg.Button('Cancel', key='-CANCEL-', size=(12, 1), disabled=True),
+                 sg.Button('Exit', key='-EXIT-', size=(12, 1))]
+            ]
+            
+            # Main layout
+            layout = [
+                [sg.Frame('Source Folder', folder_frame, expand_x=True)],
+                [sg.Frame('Tape Device', device_frame, expand_x=True)],
+                [sg.Frame('Archive Options', options_frame, expand_x=True)],
+                [sg.Frame('Progress', progress_frame, expand_x=True)],
+                [sg.Frame('Controls', button_frame, expand_x=True)]
+            ]
+            
+            self.window = sg.Window(
+                MAIN_WINDOW_TITLE,
+                layout,
+                resizable=True,
+                finalize=True
+            )
+            
+            # Initial status update
+            self.update_tape_status()
+        
+        def update_tape_status(self):
+            """Update the tape device status display."""
+            try:
+                device = self.window['-DEVICE-'].get()
+                status = self.tape_manager.get_tape_status(device)
+                status_text = f"{status['status']}: {status['details'][:30]}..."
+                self.window['-TAPE_STATUS-'].update(status_text)
+            except Exception as e:
+                self.window['-TAPE_STATUS-'].update(f"Error: {str(e)[:30]}...")
+        
+        def update_folder_size(self, folder_path):
+            """Update the estimated folder size display."""
+            try:
+                if folder_path and os.path.exists(folder_path):
+                    size, count = self.archive_manager.estimate_archive_size(folder_path)
+                    size_mb = size / (1024 * 1024)
+                    self.window['-SIZE-'].update(f"{size_mb:.1f} MB ({count} files)")
                 else:
-                    self.log_message(str(data))
+                    self.window['-SIZE-'].update("Not calculated")
+            except Exception as e:
+                self.window['-SIZE-'].update(f"Error: {e}")
+        
+        def log_message(self, message):
+            """Add a message to the log display."""
+            timestamp = time.strftime('%H:%M:%S')
+            log_entry = f"[{timestamp}] {message}\n"
+            self.window['-LOG-'].print(log_entry, end='')
+        
+        def update_progress(self, percent, status=""):
+            """Update the progress bar and status."""
+            self.window['-PROGRESS-'].update(percent)
+            if status:
+                self.window['-STATUS-'].update(status)
+        
+        def start_archive_job(self, config):
+            """Start the archive job in a separate thread."""
+            # Pre-flight checks and duplicate detection
+            if not self.pre_archive_checks(config):
+                self.window['-START-'].update(disabled=False)
+                self.window['-CANCEL-'].update(disabled=True)
+                return
             
-            if mode == ArchiveMode.STREAM:
-                # Stream mode
-                self.log_message(f"Streaming {folder_path} to tape {device}")
+            self.job_thread = threading.Thread(
+                target=self.run_archive_job,
+                args=(config,),
+                daemon=True
+            )
+            self.job_thread.start()
+        
+        def run_archive_job(self, config):
+            """Run the archive job (called in separate thread)."""
+            try:
+                self.log_message("Starting archive job...")
+                
+                folder_path = config['folder']
+                device = config['device']
+                tape_name = config.get('tape_name') or f"Tape_{device.replace('.', '').replace('\\', '')}" # Default if not provided
+                mode = config['mode']
+                copies = config['copies']
+                compression = config['compression']
+                index_files_flag = config.get('index_files', True)
+                estimated_size = config.get('estimated_size', 0)
+                file_count = config.get('file_count', 0)
+                user_archive_name = config.get('archive_name')
+
+                # Progress callback
+                def progress_callback(data):
+                    if isinstance(data, dict):
+                        if 'percent' in data:
+                            self.update_progress(data['percent'], data.get('status', ''))
+                        elif 'status' in data:
+                            self.log_message(data['status'])
+                        else:
+                            self.log_message(str(data))
+                    else:
+                        self.log_message(str(data))
+                job_result_for_event_loop = {
+                'success': False, 'error': None, 
+                'archive_id': None, 'tape_id': None, 
+                'mode': mode, 'tape_name': tape_name
+            }
+
+            try:
+                db_manager = self.archive_manager.get_database_manager()
+
+                if mode == ArchiveMode.STREAM:
+                    job_result_for_event_loop['mode'] = 'stream'
+                    try:
+                        # 1. Ensure tape exists and get tape_id
+                        tape_id = db_manager.add_tape_if_not_exists(tape_name, device, tape_status='active')
+                        job_result_for_event_loop['tape_id'] = tape_id
+                        if tape_id is None:
+                            error_msg = f"Error: Could not get or create tape record for {tape_name} ({device})."
+                            self.log_message(error_msg)
+                            self.logger.error(f"Failed to get/create tape_id for {tape_name} on {device}")
+                            job_result_for_event_loop['error'] = error_msg
+                            raise Exception(error_msg) # Caught by outer try to set job_result and send JOB_DONE
+
+                        # 2. Generate archive name
+                        archive_name_to_save = user_archive_name or \
+                                             self.archive_manager.generate_archive_name(folder_path, compression)
+
+                        # 3. Add initial archive record with "streaming_to_tape" status
+                        self.log_message(f"Creating initial archive record '{archive_name_to_save}' for streaming...")
+                        initial_archive_id = db_manager.add_archive(
+                            tape_id=tape_id,
+                            archive_name=archive_name_to_save,
+                            source_folder=folder_path,
+                            size_bytes=estimated_size, # Using pre-calculated estimate
+                            num_files=file_count,      # Using pre-calculated estimate
+                            compression_enabled=compression,
+                            status="streaming_to_tape", # Initial status
+                            archive_checksum="PENDING_STREAM" # Placeholder checksum
+                        )
+                        job_result_for_event_loop['archive_id'] = initial_archive_id
+                        self.current_archive_id = initial_archive_id # Keep track for this job instance
+
+                        if initial_archive_id is None:
+                            error_msg = f"Error: Failed to create initial archive record for {archive_name_to_save} on tape {tape_name}."
+                            self.log_message(error_msg)
+                            self.logger.error(error_msg)
+                            job_result_for_event_loop['error'] = error_msg
+                            raise Exception(error_msg) # Caught by outer try
+
+                        self.log_message(f"Initial archive record ID {initial_archive_id} created with status 'streaming_to_tape'.")
+
+                        # 4. Perform the streaming operation
+                        self.log_message(f"Streaming {folder_path} to tape {device} (Tape: {tape_name}) for archive ID {initial_archive_id}...")
+                        stream_result = self.tape_manager.stream_to_tape(
+                            folder_path, device, compression, progress_callback
+                        )
+
+                        # 5. Process streaming result
+                        if stream_result['success']:
+                            self.log_message("Streaming completed successfully. Updating archive record...")
+                            
+                            actual_bytes = stream_result.get('bytes_written', estimated_size) 
+                            actual_files = stream_result.get('files_processed', file_count) 
+                            stream_checksum = stream_result.get('checksum', "STREAMED_UNVERIFIED")
+
+                            update_success = db_manager.update_archive_status(
+                                initial_archive_id, 
+                                "completed",
+                                new_checksum=stream_checksum,
+                                new_size_bytes=actual_bytes,
+                                new_num_files=actual_files
+                            )
+                            if update_success:
+                                self.log_message(f"Archive ID {initial_archive_id} status updated to 'completed' with actual size/files.")
+                            else:
+                                self.log_message(f"Warning: Failed to update archive ID {initial_archive_id} status/details to 'completed'. DB record may be inconsistent.")
+
+                            job_result_for_event_loop['success'] = True
+                            
+                            # 6. Index files if requested
+                            if index_files_flag:
+                                self.log_message(f"Indexing files for archive ID {initial_archive_id} ('{archive_name_to_save}')...")
+                                try:
+                                    self.archive_manager._index_archive_contents(folder_path, initial_archive_id, progress_callback=progress_callback)
+                                    self.log_message("File indexing completed.")
+                                except Exception as index_exc:
+                                    self.log_message(f"Error during file indexing for archive ID {initial_archive_id}: {index_exc}")
+                                    self.logger.error(f"File indexing error for archive {initial_archive_id}: {index_exc}", exc_info=True)
+                                    # Don't mark job_result as failed overall, but log the indexing specific error
+                            else:
+                                self.log_message("File indexing skipped by user setting.")
+                        
+                        else: # Streaming failed
+                            error_msg_stream = stream_result.get('error_message', "Unknown streaming error")
+                            self.log_message(f"Streaming failed: {error_msg_stream}")
+                            job_result_for_event_loop['error'] = f"Streaming failed: {error_msg_stream}"
+                            job_result_for_event_loop['success'] = False # Ensure success is false
+                            
+                            update_failure_success = db_manager.update_archive_status(initial_archive_id, "streaming_failed")
+                            if update_failure_success:
+                                self.log_message(f"Archive ID {initial_archive_id} status updated to 'streaming_failed'.")
+                            else:
+                                self.log_message(f"Warning: Failed to update archive ID {initial_archive_id} status to 'streaming_failed'. DB record may be inconsistent.")
+
+                        # 7. Handle second copy (placeholder)
+                        if copies == 2 and job_result_for_event_loop['success']:
+                            self.log_message("First stream copy successful. Second copy is a manual step or future feature.")
+                            # self.handle_second_copy(folder_path, device, compression, progress_callback) # Placeholder call
+                        elif copies == 2 and not job_result_for_event_loop['success']:
+                            self.log_message("First stream copy failed, skipping second copy.")
+                            
+                    except Exception as stream_job_exc: # Catch exceptions within stream block
+                        self.log_message(f"Critical error during streaming logic: {stream_job_exc}")
+                        self.logger.error(f"Critical streaming logic error: {stream_job_exc}", exc_info=True)
+                        job_result_for_event_loop['error'] = job_result_for_event_loop.get('error') or str(stream_job_exc)
+                        job_result_for_event_loop['success'] = False
+                        # This will be caught by the outer try/except if not already handled by JOB_DONE
+                        # For now, this ensures job_result is populated before outer finally.
+
+                else: # Cached Mode
+                    job_result_for_event_loop['mode'] = 'cached'
+                    self.log_message("Creating archive file (Cached Mode)...")
+                    archive_info = self.archive_manager.create_cached_archive(
+                        folder_path, 
+                        compression=compression, 
+                        progress_callback=progress_callback,
+                        tape_label=tape_name, 
+                        tape_device=device,
+                        index_files=index_files_flag,
+                        archive_name_override=user_archive_name
+                    )
+                    
+                    job_result_for_event_loop['archive_id'] = archive_info.get('archive_id')
+                    job_result_for_event_loop['tape_id'] = archive_info.get('tape_id')
+                    self.current_archive_id = archive_info.get('archive_id')
+
+                    archive_path = archive_info.get('archive_path')
+                    checksum = archive_info.get('archive_checksum')
+
+                    if archive_path and checksum and job_result_for_event_loop['archive_id'] is not None:
+                        self.log_message(f"Archive created: {archive_path} (ID: {job_result_for_event_loop['archive_id']})")
+                        self.log_message(f"Checksum: {checksum[:16]}...")
+                        self.log_message(f"Writing archive to tape {device}")
+                        write_success, bytes_written = self.tape_manager.write_archive_to_tape(
+                            archive_path, device, progress_callback
+                        )
+                        
+                        if write_success:
+                            self.log_message(f"Archive written successfully ({bytes_written} bytes)")
+                            job_result_for_event_loop['success'] = True
+                            if copies == 2:
+                                self.log_message("First cached copy successful. Second copy is a manual step or future feature.")
+                                # self.handle_second_copy_cached(archive_path, device, progress_callback)
+                        else:
+                            self.log_message("Archive write to tape failed. Check tape and device.")
+                            job_result_for_event_loop['error'] = "Archive write to tape failed."
+                            job_result_for_event_loop['success'] = False
+                    else:
+                        err_msg = "Failed to create cached archive file, its database record, or retrieve archive ID. Check logs."
+                        if not archive_path: err_msg = "Failed to create cached archive file (path missing)."
+                        elif not checksum: err_msg = "Failed to create cached archive file (checksum missing)."
+                        elif job_result_for_event_loop['archive_id'] is None: err_msg = "Failed to create/retrieve archive DB record for cached archive."
+                        self.log_message(err_msg)
+                        job_result_for_event_loop['error'] = err_msg
+                        job_result_for_event_loop['success'] = False
+                
+                # Final job status update to UI before JOB_DONE signal
+                if job_result_for_event_loop['success']:
+                    self.update_progress(100, "Job completed successfully")
+                    self.log_message("Archive job finished successfully.")
+                else:
+                    final_error_msg = job_result_for_event_loop.get('error', 'Job failed with unknown error')
+                    self.update_progress(100, f"Job failed: {final_error_msg[:50]}...") # Show truncated error on progress
+                    self.log_message(f"Archive job finished with errors: {final_error_msg}")
+                
+            except Exception as e: # Outer catch-all for unexpected errors
+                self.log_message(f"Unexpected error during archive job: {e}")
+                self.logger.error(f"Unexpected archive job error: {e}", exc_info=True)
+                job_result_for_event_loop['error'] = job_result_for_event_loop.get('error') or str(e) # Preserve earlier error if any
+                job_result_for_event_loop['success'] = False
+            
+            finally:
+                # Ensure JOB_DONE is always sent with the most current job_result state
+                self.window.write_event_value('-JOB_DONE-', job_result_for_event_loop)
+        
+        def handle_second_copy(self, folder_path, device, compression, progress_callback):
+            """Handle second tape copy for streaming mode."""
+            result = sg.popup_yes_no(
+                'Second Copy',
+                'Insert second tape and click Yes to create second copy.',
+                title='Second Tape Copy'
+            )
+            
+            if result == 'Yes':
+                self.log_message("Creating second copy...")
+                self.tape_manager.rewind_tape(device)
                 success = self.tape_manager.stream_to_tape(
                     folder_path, device, compression, progress_callback
                 )
-                
                 if success:
-                    self.log_message("Streaming completed successfully")
-                    if copies == 2:
-                        self.handle_second_copy(folder_path, device, compression, progress_callback)
+                    self.log_message("Second copy completed successfully")
                 else:
-                    self.log_message("Streaming failed")
-                    
-            else:
-                # Cached mode
-                self.log_message("Creating archive file...")
-                archive_path, checksum = self.archive_manager.create_cached_archive(
-                    folder_path, compression=compression, progress_callback=progress_callback
-                )
-                
-                self.log_message(f"Archive created: {archive_path}")
-                self.log_message(f"Checksum: {checksum[:16]}...")
-                
-                # Write to tape
-                self.log_message(f"Writing archive to tape {device}")
+                    self.log_message("Second copy failed")
+        
+        def handle_second_copy_cached(self, archive_path, device, progress_callback):
+            """Handle second tape copy for cached mode."""
+            result = sg.popup_yes_no(
+                'Second Copy',
+                'Insert second tape and click Yes to create second copy.',
+                title='Second Tape Copy'
+            )
+            
+            if result == 'Yes':
+                self.log_message("Writing second copy...")
+                self.tape_manager.rewind_tape(device)
                 success, bytes_written = self.tape_manager.write_archive_to_tape(
                     archive_path, device, progress_callback
                 )
-                
                 if success:
-                    self.log_message(f"Archive written successfully ({bytes_written} bytes)")
-                    if copies == 2:
-                        self.handle_second_copy_cached(archive_path, device, progress_callback)
+                    self.log_message(f"Second copy completed successfully ({bytes_written} bytes)")
                 else:
-                    self.log_message("Archive write failed")
-            
-            self.update_progress(100, "Job completed")
-            self.log_message("Archive job finished")
-            
-        except Exception as e:
-            self.log_message(f"Error during archive job: {e}")
-            self.logger.error(f"Archive job error: {e}")
+                    self.log_message("Second copy failed")
         
         finally:
-            # Re-enable start button
-            self.window.write_event_value('-JOB_DONE-', None)
-    
-    def handle_second_copy(self, folder_path, device, compression, progress_callback):
-        """Handle second tape copy for streaming mode."""
-        result = sg.popup_yes_no(
-            'Second Copy',
-            'Insert second tape and click Yes to create second copy.',
-            title='Second Tape Copy'
-        )
-        
-        if result == 'Yes':
-            self.log_message("Creating second copy...")
-            self.tape_manager.rewind_tape(device)
-            success = self.tape_manager.stream_to_tape(
-                folder_path, device, compression, progress_callback
-            )
-            if success:
-                self.log_message("Second copy completed successfully")
+            # Ensure tape device is released
+            if hasattr(self, 'tape_manager') and self.tape_manager:
+                self.tape_manager.release_tape_device()
+            
+            # job_result_for_event_loop is initialized within the try block of run_archive_job (around line 627)
+            # and should be updated by the try/except logic within run_archive_job.
+            # If it's somehow not defined here or not a dict, it indicates a flaw in the preceding logic.
+            result_to_send = None
+            if 'job_result_for_event_loop' in locals() and isinstance(job_result_for_event_loop, dict):
+                result_to_send = job_result_for_event_loop
             else:
-                self.log_message("Second copy failed")
-    
-    def handle_second_copy_cached(self, archive_path, device, progress_callback):
-        """Handle second tape copy for cached mode."""
-        result = sg.popup_yes_no(
-            'Second Copy',
-            'Insert second tape and click Yes to create second copy.',
-            title='Second Tape Copy'
-        )
-        
-        if result == 'Yes':
-            self.log_message("Writing second copy...")
-            self.tape_manager.rewind_tape(device)
-            success, bytes_written = self.tape_manager.write_archive_to_tape(
-                archive_path, device, progress_callback
-            )
-            if success:
-                self.log_message(f"Second copy completed successfully ({bytes_written} bytes)")
-            else:
-                self.log_message("Second copy failed")
-    
-    def run(self):
+                self.logger.error("CRITICAL: job_result_for_event_loop not properly defined or not a dict in finally. Sending default error.")
+                # config is available as it's an argument to run_archive_job
+                result_to_send = {
+                    'success': False, 
+                    'error_message': 'Job result was not properly generated due to an internal error.',
+                    'archive_id': config.get('archive_id'), # Use archive_id from config
+                    'files_processed': 0,
+                    'bytes_written': 0,
+                    'mode': config.get('mode'),
+                    'tape_name': config.get('tape_name')
+                }
+
+            self.window.write_event_value('-JOB_DONE-', result_to_send)
+            self.current_job = None # Clear current job reference
+
+    def run(self): # De-dented to be a method of LTOArchiveGUI
         """Main GUI event loop with tabbed interface support."""
         self.update_log(INIT_MESSAGE)
         self.populate_recovery_tapes()
         self.populate_search_tapes()
-        self.update_management_stats()
-        
+        self.update_tape_list()  # Populate management tape list on startup
+
         while True:
             event, values = self.window.read(timeout=100)
-            
-            if event in (sg.WIN_CLOSED, '-EXIT-'):
+
+            if event == sg.WIN_CLOSED or event == '-EXIT-':
+                if self.job_thread and self.job_thread.is_alive():
+                    # Attempt to signal cancellation if a job is running
+                    # This assumes a more robust cancellation mechanism might be added later
+                    self.log_message("Attempting to cancel active job before exiting...", 'warn')
+                    # self.handle_cancel_archive() # Or a generic cancel
+                    # For now, just log and break. Proper cleanup might be needed.
                 break
-            
-            # Archive Tab Events
-            elif event == '-FOLDER-':
-                folder_path = values['-FOLDER-']
-                if folder_path:
-                    threading.Thread(
-                        target=self.update_folder_size,
-                        args=(folder_path,),
-                        daemon=True
-                    ).start()
-                    # Update suggested tape with duplicate check
-                    self.update_suggested_tape_with_duplicates(folder_path)
-            
+
+            # --- Archive Tab Events ---
+            if event == '-START-':
+                try:
+                    config = {
+                        'folder_path': values['-FOLDER-'],
+                        'device': values['-DEVICE-'],
+                        'mode': ArchiveMode.STREAM if values['-STREAM-'] else ArchiveMode.CACHED,
+                        'compression': values['-COMPRESS-'],
+                        'copies': 2 if values['-COPY2-'] else 1,
+                        'archive_name': values['-ARCHIVE_NAME-'] or None,
+                        'index_files': values['-INDEX_FILES-']
+                    }
+                    self.start_archive_job(config)
+                except Exception as e:
+                    self.log_message(f"Error starting archive: {e}", 'error')
+                    sg.popup_error(f"Error starting archive: {e}")
+                
             elif event == '-CALC_SIZE-':
-                folder_path = values['-FOLDER-']
-                if folder_path:
-                    self.update_folder_size(folder_path)
-            
-            elif event == '-REFRESH-':
+                if values['-FOLDER-']:
+                    self.update_folder_size(values['-FOLDER-'])
+                else:
+                    sg.popup('Please select a folder first to calculate its size.')
+
+            elif event == '-REFRESH-': # Refresh tape devices
                 devices = self.tape_manager.detect_tape_devices()
                 if not devices:
-                    devices = ['\\.\\Tape0']
-                self.window['-DEVICE-'].update(values=devices, value=devices[0])
+                    devices = ['\\.\Tape0'] # Default
+                self.window['-DEVICE-'].update(values=devices, value=devices[0] if devices else '')
                 self.update_tape_status()
-            
-            elif event == '-START-':
-                self.handle_start_archive(values)
-            
-            elif event == '-CANCEL-':
-                self.handle_cancel_archive()
-            
+
             elif event == '-PREVIEW-':
                 self.handle_preview_files(values['-FOLDER-'])
             
-            # Recovery Tab Events
+            elif event == '-CANCEL-': # Placeholder for archive cancel
+                # This needs to be connected to the job thread cancellation logic
+                self.log_message("Cancel button clicked - cancellation logic to be implemented.", 'warn')
+                if self.current_job:
+                     # self.current_job.cancel() # Hypothetical cancel method on job object
+                     self.window['-CANCEL-'].update(disabled=True)
+                     self.window['-START-'].update(disabled=False)
+                     self.log_message("Archive job cancellation requested.")
+                else:
+                    self.log_message("No active job to cancel.")
+
+            # --- Recovery Tab Events ---
             elif event == '-RECOVERY_TAPE-':
-                self.handle_recovery_tape_selection(values['-RECOVERY_TAPE-'])
-            
+                self.handle_recovery_tape_selection(values.get('-RECOVERY_TAPE-'))
             elif event == '-LOAD_TAPE-':
-                self.handle_load_tape_contents(values['-RECOVERY_TAPE-'])
-            
+                self.handle_load_tape_contents(values.get('-RECOVERY_TAPE-'))
             elif event == '-RECOVERY_ARCHIVE-':
-                self.handle_recovery_archive_selection(values['-RECOVERY_ARCHIVE-'])
-            
+                self.handle_recovery_archive_selection(values.get('-RECOVERY_ARCHIVE-'))
             elif event == '-START_RECOVERY-':
                 self.handle_start_recovery(values)
-            
             elif event == '-CANCEL_RECOVERY-':
                 self.handle_cancel_recovery()
-            
-            elif event == '-BROWSE_ARCHIVES-':
-                self.handle_browse_archives()
-            
-            # Search Tab Events
+
+            # --- Search Tab Events ---
             elif event == '-SEARCH_BTN-':
                 self.handle_search(values)
-            
-            elif event == '-ADV_SEARCH_BTN-':
-                self.handle_advanced_search()
-            
-            elif event == '-SEARCH_RESULTS-':
-                self.handle_search_selection(values['-SEARCH_RESULTS-'])
-            
+            elif event == '-SEARCH_RESULTS-': # Table selection
+                self.handle_search_selection(values.get('-SEARCH_RESULTS-'))
             elif event == '-SEARCH_RECOVER-':
                 self.handle_search_recover(values)
-            
             elif event == '-SEARCH_SHOW_ARCHIVE-':
                 self.handle_search_show_archive(values)
-            
             elif event == '-SEARCH_EXPORT-':
                 self.handle_search_export()
-            
             elif event == '-SEARCH_CLEAR-':
                 self.handle_search_clear()
-            
-            # Management Tab Events
-            elif event == '-REFRESH_TAPES-':
-                self.update_tape_list()
-            
+            elif event == '-ADVANCED_SEARCH-':
+                self.handle_advanced_search()
+
+            # --- Management Tab Events ---
+            elif event == '-TAPE_LIST-': # Table selection
+                self.handle_tape_selection(values.get('-TAPE_LIST-'))
             elif event == '-ADD_TAPE-':
                 self.handle_add_tape()
-            
-            elif event == '-TAPE_LIST-':
-                self.handle_tape_selection(values['-TAPE_LIST-'])
-            
             elif event == '-EDIT_TAPE-':
                 self.handle_edit_tape(values)
-            
             elif event == '-DELETE_TAPE-':
                 self.handle_delete_tape(values)
-            
-            elif event == '-BROWSE_TAPE-':
+            elif event == '-BROWSE_TAPE-': # Different from BROWSE_ARCHIVES
                 self.handle_browse_tape(values)
-            
             elif event == '-EXPORT_INVENTORY-':
                 self.handle_export_inventory()
-            
             elif event == '-IMPORT_DATA-':
                 self.handle_import_data()
-            
             elif event == '-DB_MAINTENANCE-':
                 self.handle_db_maintenance()
-            
+            elif event == '-BROWSE_ARCHIVES-': # General archive browser
+                self.handle_browse_archives()
+
+            # --- JOB DONE Event --- (From run_archive_job thread)
             elif event == '-JOB_DONE-':
-                # Archive job finished, re-enable controls
-                self.window['-START-'].update(disabled=False)
-                self.window['-CANCEL-'].update(disabled=True)
+                job_result = values[event]
+                if job_result:
+                    status = job_result.get('status', 'unknown')
+                    archive_name_msg = f" for archive '{job_result.get('archive_name', 'N/A')}'" if job_result.get('archive_name') else ""
+                    self.log_message(f"Archive job finished with status: {status}{archive_name_msg}")
+                    
+                    if job_result.get('error_message'):
+                        self.log_message(f"Error: {job_result['error_message']}", 'error')
+                        sg.popup_error(f"Job Failed: {job_result['error_message']}")
+                    elif status == 'completed' or status == 'indexed':
+                        self.log_message(f"Successfully processed {job_result.get('files_processed', 0)} files, {job_result.get('bytes_written', 0)} bytes written.")
+                    elif status == 'streaming_failed' or status == 'caching_failed':
+                         self.log_message(f"Job failed. See logs for details.", 'error')
+                    else:
+                        self.log_message("Job completed.") # Generic completion
+
+                    # Re-enable UI elements
+                    self.window['-START-'].update(disabled=False)
+                    self.window['-CANCEL-'].update(disabled=True)
+                    self.window['-FOLDER-'].update(disabled=False)
+                    self.window['-DEVICE-'].update(disabled=False)
+                    # Add other elements like radio buttons, checkboxes if they were disabled
+                    
+                    # Refresh lists and stats based on job outcome
+                    if status not in ['streaming_failed', 'caching_failed']:
+                        self.update_tape_list() # This also updates management stats
+                        self.populate_recovery_tapes()
+                        self.populate_search_tapes()
+                        self.update_tape_status() # Update current tape status
+                else:
+                    self.log_message("Job finished, but no result data was received.", 'warn')
+                    
+                # Clear progress and reset job tracking
+                self.update_progress(0, "Ready")
+                self.current_job = None
+                self.job_thread = None # Clear the thread reference
             
-            elif event == '-RECOVERY_DONE-':
-                # Recovery job finished, re-enable controls
-                self.window['-START_RECOVERY-'].update(disabled=False)
-                self.window['-CANCEL_RECOVERY-'].update(disabled=True)
-                self.window['-RECOVERY_PROGRESS-'].update(100)
-                self.window['-RECOVERY_STATUS-'].update("Recovery completed")
-        
-        # Cleanup
-        if self.archive_manager:
-            self.archive_manager.cleanup()
-        
         self.window.close()
     
-    def pre_archive_checks(self, config):
-        """Perform pre-archive checks including duplicate detection and tape suggestions."""
-        try:
-            folder_path = config['folder']
-            
-            # Check for existing archives of this folder
-            if self.db_manager:
-                existing_archives = self.archive_manager.find_archives_by_folder(folder_path)
-                if existing_archives:
-                    archive_list = "\n".join([
-                        f"• {arch['archive_name']} on {arch['tape_label']} ({arch['archive_date'][:10]})"
-                        for arch in existing_archives[:5]
-                    ])
-                    
-                    if len(existing_archives) > 5:
-                        archive_list += f"\n... and {len(existing_archives) - 5} more"
-                    
-                    result = sg.popup_yes_no(
-                        f"Duplicate Archive Warning\n\n"
-                        f"Found {len(existing_archives)} existing archive(s) for this folder:\n\n"
-                        f"{archive_list}\n\n"
-                        f"Do you want to continue with creating a new archive?",
-                        title="Duplicate Archive Detected"
-                    )
-                    
-                    if result != 'Yes':
-                        return False
-                
-                # Show suggested tape if indexing enabled
-                if config['index_files']:
-                    estimated_size, _ = self.archive_manager.estimate_archive_size(folder_path)
-                    suggested_tape = self.archive_manager.suggest_tape_for_new_archive(estimated_size)
-                    
-                    if suggested_tape:
-                        current_device = config['device']
-                        suggested_device = suggested_tape['tape_device']
-                        
-                        if current_device != suggested_device:
-                            result = sg.popup_yes_no(
-                                f"Tape Optimization Suggestion\n\n"
-                                f"Current device: {current_device}\n"
-                                f"Suggested tape: {suggested_tape['tape_label']} on {suggested_device}\n"
-                                f"Remaining space: {suggested_tape['remaining_space']/1024/1024/1024:.1f} GB\n\n"
-                                f"Would you like to switch to the suggested tape?",
-                                title="Tape Suggestion"
-                            )
-                            
-                            if result == 'Yes':
-                                # Update the device in the config
-                                config['device'] = suggested_device
-                                self.window['-DEVICE-'].update(suggested_device)
-                                self.update_log(f"Switched to suggested tape: {suggested_tape['tape_label']}")
-            
-            return True
-            
-        except Exception as e:
-            self.logger.error(f"Pre-archive check failed: {e}")
-            sg.popup_error('Pre-flight Check Error', f'Failed to perform pre-archive checks: {e}')
-            return False
-    
-    def generate_tape_label(self, device):
-        """Generate a tape label based on device and current date."""
-        try:
-            # Try to get existing tape label from database
-            if self.db_manager:
-                existing_tapes = self.db_manager.get_tapes_by_device(device)
-                if existing_tapes:
-                    return existing_tapes[0]['tape_label']
-            
-            # Generate new label
-            date_str = time.strftime('%Y%m%d')
-            return f"LTO_{date_str}_{device.replace('\\', '').replace('.', '').replace('Tape', 'T')}"
-            
-        except Exception as e:
-            self.logger.warning(f"Failed to generate tape label: {e}")
-            return f"LTO_TAPE_{int(time.time())}"
-    
-    def update_log(self, message, tab='archive'):
-        """Add a message to the appropriate log display."""
-        timestamp = time.strftime('%H:%M:%S')
-        log_entry = f"[{timestamp}] {message}\n"
-        
-        if tab == 'archive':
-            self.window['-LOG-'].print(log_entry, end='')
-        elif tab == 'recovery':
-            self.window['-RECOVERY_LOG-'].print(log_entry, end='')
-    
-    def update_suggested_tape_with_duplicates(self, folder_path):
-        """Update suggested tape based on folder size with duplicate detection."""
-        try:
-            if folder_path and os.path.exists(folder_path):
-                # Check for duplicates first
-                existing_archives = self.archive_manager.find_archives_by_folder(folder_path)
-                
-                if existing_archives:
-                    latest_archive = existing_archives[0]
-                    suggestion_text = f"⚠️ Duplicate found: {latest_archive['tape_label']} ({latest_archive['archive_date'][:10]})"
-                    self.window['-SUGGESTED_TAPE-'].update(suggestion_text)
-                else:
-                    # No duplicates, suggest optimal tape
-                    size, _ = self.archive_manager.estimate_archive_size(folder_path)
-                    suggested = self.tape_library.suggest_best_tape(size)
-                    
-                    if suggested:
-                        remaining_gb = suggested['remaining_space'] / (1024**3)
-                        suggestion_text = f"✓ {suggested['tape_label']} ({remaining_gb:.1f} GB available)"
-                        self.window['-SUGGESTED_TAPE-'].update(suggestion_text)
-                    else:
-                        self.window['-SUGGESTED_TAPE-'].update("No suitable tape found - may need new tape")
-        except Exception as e:
-            self.window['-SUGGESTED_TAPE-'].update(f"Error: {e}")
-    
-    def update_suggested_tape(self, folder_path):
-        """Legacy method - redirects to enhanced version."""
-        self.update_suggested_tape_with_duplicates(folder_path)
-    
-    def populate_recovery_tapes(self):
-        """Populate recovery tape dropdown."""
-        try:
-            tapes = self.db_manager.get_all_tapes()
-            tape_options = [f"{tape['tape_label']} ({tape['tape_device']})" for tape in tapes]
-            self.window['-RECOVERY_TAPE-'].update(values=tape_options)
-        except Exception as e:
-            self.logger.error(f"Failed to populate recovery tapes: {e}")
-    
-    def populate_search_tapes(self):
-        """Populate search tape filter dropdown."""
-        try:
-            tapes = self.db_manager.get_all_tapes()
-            tape_options = ['All Tapes'] + [tape['tape_label'] for tape in tapes]
-            self.window['-SEARCH_TAPE-'].update(values=tape_options, value='All Tapes')
-        except Exception as e:
-            self.logger.error(f"Failed to populate search tapes: {e}")
-    
-    def update_management_stats(self):
-        """Update management tab statistics."""
-        try:
-            stats = self.db_manager.get_database_stats()
-            self.window['-STAT_TOTAL_TAPES-'].update(str(stats.get('total_tapes', 0)))
-            self.window['-STAT_ACTIVE_TAPES-'].update(str(stats.get('active_tapes', 0)))
-            self.window['-STAT_TOTAL_ARCHIVES-'].update(str(stats.get('total_archives', 0)))
-            self.window['-STAT_TOTAL_FILES-'].update(f"{stats.get('total_files', 0):,}")
-            self.window['-STAT_TOTAL_SIZE-'].update(f"{stats.get('total_size_gb', 0):.1f} GB")
-        except Exception as e:
-            self.logger.error(f"Failed to update statistics: {e}")
-    
-    def handle_start_archive(self, values):
-        """Handle start archive button click."""
-        folder_path = values['-FOLDER-']
-        if not folder_path:
-            sg.popup_error('Error', 'Please select a source folder')
-            return
-        
-        valid, message = self.archive_manager.validate_source_folder(folder_path)
-        if not valid:
-            sg.popup_error('Folder Error', message)
-            return
-        
-        # Build job configuration
-        config = {
-            'folder': folder_path,
-            'device': values['-DEVICE-'],
-            'mode': ArchiveMode.STREAM if values['-STREAM-'] else ArchiveMode.CACHED,
-            'copies': 2 if values['-COPY2-'] else 1,
-            'compression': values['-COMPRESS-'],
-            'index_files': values['-INDEX_FILES-'],
-            'archive_name': values['-ARCHIVE_NAME-'].strip() or None
-        }
-        
-        # Disable start button and enable cancel
-        self.window['-START-'].update(disabled=True)
-        self.window['-CANCEL-'].update(disabled=False)
-        
-        # Start the job
-        self.start_archive_job(config)
-    
-    def handle_cancel_archive(self):
-        """Handle cancel archive button click."""
-        self.update_log("Cancel requested - job will stop after current operation")
-        # TODO: Implement proper cancellation
-    
-    def handle_preview_files(self, folder_path):
+def handle_preview_files(self, folder_path):
         """Handle preview files button click."""
         if not folder_path:
             sg.popup_error('Error', 'Please select a source folder')
@@ -948,7 +1045,7 @@ class LTOArchiveGUI:
         except Exception as e:
             sg.popup_error('Preview Error', f'Failed to preview files: {e}')
     
-    def handle_recovery_tape_selection(self, tape_selection):
+def handle_recovery_tape_selection(self, tape_selection):
         """Handle recovery tape selection."""
         if not tape_selection:
             return
@@ -963,7 +1060,7 @@ class LTOArchiveGUI:
         except Exception as e:
             self.logger.error(f"Failed to load tape archives: {e}")
     
-    def handle_search(self, values):
+def handle_search(self, values):
         """Handle search button click."""
         query = values['-SEARCH_QUERY-'].strip()
         if not query:
@@ -985,7 +1082,7 @@ class LTOArchiveGUI:
         except Exception as e:
             sg.popup_error('Search Error', f'Search failed: {e}')
     
-    def handle_advanced_search(self):
+def handle_advanced_search(self):
         """Handle advanced search button click."""
         try:
             adv_gui = AdvancedSearchGUI(self.db_manager, self.advanced_search)
@@ -993,14 +1090,14 @@ class LTOArchiveGUI:
         except Exception as e:
             sg.popup_error('Advanced Search Error', f'Failed to open advanced search: {e}')
     
-    def handle_browse_archives(self):
+def handle_browse_archives(self):
         """Handle browse archives button click."""
         try:
             self.tape_browser.run_browser_interface()
         except Exception as e:
             sg.popup_error('Browser Error', f'Failed to open tape browser: {e}')
     
-    def update_tape_list(self):
+def update_tape_list(self):
         """Update the tape list in management tab."""
         try:
             tapes = self.db_manager.get_all_tapes()
@@ -1025,7 +1122,7 @@ class LTOArchiveGUI:
         except Exception as e:
             self.logger.error(f"Failed to update tape list: {e}")
     
-    def handle_add_tape(self):
+def handle_add_tape(self):
         """Handle add tape button click."""
         layout = [
             [sg.Text('Add New Tape to Library')],
@@ -1060,7 +1157,7 @@ class LTOArchiveGUI:
         
         add_window.close()
     
-    def handle_db_maintenance(self):
+def handle_db_maintenance(self):
         """Handle database maintenance button click."""
         try:
             from database_init import DatabaseInitializer
@@ -1101,9 +1198,9 @@ class LTOArchiveGUI:
             
             maint_window.close()
             
-        except Exception as e:
-            sg.popup_error('Maintenance Error', f'Database maintenance failed: {e}')
-    
+    except Exception as e:
+        sg.popup_error('Maintenance Error', f'Database maintenance failed: {e}')
+
     def handle_load_tape_contents(self, tape_selection):
         """Handle load tape contents button click."""
         if not tape_selection:
@@ -1121,7 +1218,7 @@ class LTOArchiveGUI:
                 self.update_log(f"Loaded {len(archives)} archives from tape {tape_label}", 'recovery')
         except Exception as e:
             sg.popup_error('Load Error', f'Failed to load tape contents: {e}')
-    
+
     def handle_recovery_archive_selection(self, archive_selection):
         """Handle recovery archive selection."""
         if not archive_selection:
@@ -1147,7 +1244,7 @@ class LTOArchiveGUI:
                 self.update_log(f"Loaded {len(files)} files from archive {archive_selection}", 'recovery')
         except Exception as e:
             sg.popup_error('Archive Error', f'Failed to load archive files: {e}')
-    
+
     def handle_start_recovery(self, values):
         """Handle start recovery button click."""
         tape_selection = values['-RECOVERY_TAPE-']
@@ -1235,12 +1332,12 @@ class LTOArchiveGUI:
             sg.popup_error('Recovery Error', f'Failed to start recovery: {e}')
             self.window['-START_RECOVERY-'].update(disabled=False)
             self.window['-CANCEL_RECOVERY-'].update(disabled=True)
-    
+
     def handle_cancel_recovery(self):
         """Handle cancel recovery button click."""
         self.update_log("Recovery cancellation requested", 'recovery')
         # TODO: Implement proper cancellation mechanism
-    
+
     def handle_search_selection(self, selection):
         """Handle search results selection."""
         try:
@@ -1264,244 +1361,201 @@ class LTOArchiveGUI:
                     self.window['-SEARCH_RECOVER-'].update(disabled=False)
                     self.window['-SEARCH_SHOW_ARCHIVE-'].update(disabled=False)
         except Exception as e:
-            self.logger.error(f"Search selection error: {e}")
-    
-    def handle_search_recover(self, values):
-        """Handle recover selected files from search."""
-        try:
-            selected_rows = values['-SEARCH_RESULTS-']
-            if not selected_rows:
-                sg.popup('Please select files to recover')
-                return
+            self.logger.error(f"Tape selection error: {e}")
+
+def handle_search_recover(self, values):
+    """Handle recover selected files from search."""
+    try:
+        selected_rows = values['-SEARCH_RESULTS-']
+        if not selected_rows:
+            sg.popup('Please select files to recover')
+    {{ ... }}
+        else:
+            sg.popup_error(f'Failed to recover: {file_path}')
+    except Exception as e:
+        sg.popup_error('Recovery Error', f'Search recovery failed: {e}')
+
+def handle_search_show_archive(self, values):
+    """Handle show selected file in archive browser."""
+    try:
+        selected_rows = values['-SEARCH_RESULTS-']
+        if not selected_rows:
+            sg.popup('Please select a file first')
+    {{ ... }}
+    # Open tape browser and navigate to archive
+    self.tape_browser.run_browser_interface(archive_name)
+    except Exception as e:
+        sg.popup_error('Browser Error', f'Failed to show archive: {e}')
+
+def handle_search_export(self):
+    """Handle export search results."""
+    try:
+        table_data = self.window['-SEARCH_RESULTS-'].get()
+        if not table_data:
+            sg.popup('No search results to export')
+    {{ ... }}
+    self.search_interface.export_search_results(table_data, export_path)
+    sg.popup(f'Search results exported to: {export_path}')
+    except Exception as e:
+        sg.popup_error('Export Error', f'Failed to export results: {e}')
+
+def handle_search_clear(self):
+    """Handle clear search results."""
+    self.window['-SEARCH_RESULTS-'].update(values=[])
+    self.window['-SEARCH_DETAILS-'].update('')
+    self.window['-SEARCH_COUNT-'].update('0 files found')
+    self.window['-SEARCH_RECOVER-'].update(disabled=True)
+    self.window['-SEARCH_SHOW_ARCHIVE-'].update(disabled=True)
+
+def handle_tape_selection(self, selection):
+    """Handle tape selection in management tab."""
+    try:
+        if selection:
+            table_data = self.window['-TAPE_LIST-'].get()
+            if selection and len(table_data) > selection[0]:
+    {{ ... }}
+    # Enable management buttons
+    self.window['-EDIT_TAPE-'].update(disabled=False)
+    self.window['-DELETE_TAPE-'].update(disabled=False)
+    self.window['-BROWSE_TAPE-'].update(disabled=False)
+    except Exception as e:
+        self.logger.error(f"Search selection error: {e}")
+
+def handle_edit_tape(self, values):
+    """Handle edit tape button click."""
+    try:
+        selected_rows = values['-TAPE_LIST-']
+        if not selected_rows:
+            sg.popup('Please select a tape to edit')
+            return
+        
+        table_data = self.window['-TAPE_LIST-'].get()
+        tape_label = table_data[selected_rows[0]][0]
+        tape = self.db_manager.find_tape_by_label(tape_label)
+        
+        if tape:
+            # Update tape in database
+            new_label = values['-TAPE_DETAIL_LABEL-']
+            new_status = values['-TAPE_DETAIL_STATUS-']
+            new_notes = values['-TAPE_DETAIL_NOTES-']
             
-            output_dir = sg.popup_get_folder('Select recovery output directory')
-            if not output_dir:
-                return
-            
-            table_data = self.window['-SEARCH_RESULTS-'].get()
-            
-            for row in selected_rows:
-                file_info = table_data[row]
-                file_path = file_info[0]
-                archive_name = file_info[3]
-                tape_label = file_info[4]
-                
-                # Find tape and start recovery
-                tape = self.db_manager.find_tape_by_label(tape_label)
-                if tape:
-                    result = self.recovery_manager.extract_specific_files(
-                        tape['tape_device'], archive_name, [file_path], output_dir
-                    )
-                    if result:
-                        sg.popup(f'Successfully recovered: {file_path}')
-                    else:
-                        sg.popup_error(f'Failed to recover: {file_path}')
-        except Exception as e:
-            sg.popup_error('Recovery Error', f'Search recovery failed: {e}')
-    
-    def handle_search_show_archive(self, values):
-        """Handle show selected file in archive browser."""
-        try:
-            selected_rows = values['-SEARCH_RESULTS-']
-            if not selected_rows:
-                sg.popup('Please select a file first')
-                return
-            
-            table_data = self.window['-SEARCH_RESULTS-'].get()
-            file_info = table_data[selected_rows[0]]
-            archive_name = file_info[3]
-            
-            # Open tape browser and navigate to archive
-            self.tape_browser.run_browser_interface(archive_name)
-        except Exception as e:
-            sg.popup_error('Browser Error', f'Failed to show archive: {e}')
-    
-    def handle_search_export(self):
-        """Handle export search results."""
-        try:
-            table_data = self.window['-SEARCH_RESULTS-'].get()
-            if not table_data:
-                sg.popup('No search results to export')
-                return
-            
-            export_path = sg.popup_get_file(
-                'Save search results',
-                save_as=True,
-                file_types=[('CSV Files', '*.csv')],
-                default_extension='.csv'
+            self.db_manager.update_tape(
+                tape['tape_id'],
+                tape_label=new_label,
+                tape_status=new_status,
+                notes=new_notes
             )
             
-            if export_path:
-                self.search_interface.export_search_results(table_data, export_path)
-                sg.popup(f'Search results exported to: {export_path}')
-        except Exception as e:
-            sg.popup_error('Export Error', f'Failed to export results: {e}')
-    
-    def handle_search_clear(self):
-        """Handle clear search results."""
-        self.window['-SEARCH_RESULTS-'].update(values=[])
-        self.window['-SEARCH_DETAILS-'].update('')
-        self.window['-SEARCH_COUNT-'].update('0 files found')
-        self.window['-SEARCH_RECOVER-'].update(disabled=True)
-        self.window['-SEARCH_SHOW_ARCHIVE-'].update(disabled=True)
-    
-    def handle_tape_selection(self, selection):
-        """Handle tape selection in management tab."""
-        try:
-            if selection:
-                table_data = self.window['-TAPE_LIST-'].get()
-                if selection and len(table_data) > selection[0]:
-                    selected_tape = table_data[selection[0]]
-                    tape_label = selected_tape[0]
-                    
-                    # Get tape details from database
-                    tape = self.db_manager.find_tape_by_label(tape_label)
-                    if tape:
-                        self.window['-TAPE_DETAIL_LABEL-'].update(tape['tape_label'], disabled=False)
-                        self.window['-TAPE_DETAIL_STATUS-'].update(tape.get('tape_status', 'unknown'), disabled=False)
-                        self.window['-TAPE_DETAIL_NOTES-'].update(tape.get('notes', ''), disabled=False)
-                        
-                        # Enable management buttons
-                        self.window['-EDIT_TAPE-'].update(disabled=False)
-                        self.window['-DELETE_TAPE-'].update(disabled=False)
-                        self.window['-BROWSE_TAPE-'].update(disabled=False)
-        except Exception as e:
-            self.logger.error(f"Tape selection error: {e}")
-    
-    def handle_edit_tape(self, values):
-        """Handle edit tape button click."""
-        try:
-            selected_rows = values['-TAPE_LIST-']
-            if not selected_rows:
-                sg.popup('Please select a tape to edit')
-                return
-            
-            table_data = self.window['-TAPE_LIST-'].get()
-            tape_label = table_data[selected_rows[0]][0]
+            sg.popup('Tape updated successfully')
+            self.update_tape_list()
+            self.populate_recovery_tapes()
+            self.populate_search_tapes()
+    except Exception as e:
+        sg.popup_error('Edit Error', f'Failed to edit tape: {e}')
+
+def handle_delete_tape(self, values):
+    """Handle delete tape button click."""
+    try:
+        selected_rows = values['-TAPE_LIST-']
+        if not selected_rows:
+            sg.popup('Please select a tape to delete')
+            return
+        
+        table_data = self.window['-TAPE_LIST-'].get()
+        tape_label = table_data[selected_rows[0]][0]
+        
+        # Confirm deletion
+        result = sg.popup_yes_no(
+            f'Are you sure you want to delete tape "{tape_label}"?\n'
+            'This will remove all associated archive and file records.',
+            title='Confirm Deletion'
+        )
+        
+        if result == 'Yes':
             tape = self.db_manager.find_tape_by_label(tape_label)
-            
             if tape:
-                # Update tape in database
-                new_label = values['-TAPE_DETAIL_LABEL-']
-                new_status = values['-TAPE_DETAIL_STATUS-']
-                new_notes = values['-TAPE_DETAIL_NOTES-']
-                
-                self.db_manager.update_tape(
-                    tape['tape_id'],
-                    tape_label=new_label,
-                    tape_status=new_status,
-                    notes=new_notes
-                )
-                
-                sg.popup('Tape updated successfully')
+                self.db_manager.delete_tape(tape['tape_id'])
+                sg.popup('Tape deleted successfully')
                 self.update_tape_list()
                 self.populate_recovery_tapes()
                 self.populate_search_tapes()
-        except Exception as e:
-            sg.popup_error('Edit Error', f'Failed to edit tape: {e}')
-    
-    def handle_delete_tape(self, values):
-        """Handle delete tape button click."""
-        try:
-            selected_rows = values['-TAPE_LIST-']
-            if not selected_rows:
-                sg.popup('Please select a tape to delete')
-                return
+                
+                # Clear details
+                self.window['-TAPE_DETAIL_LABEL-'].update('', disabled=True)
+                self.window['-TAPE_DETAIL_STATUS-'].update('', disabled=True)
+                self.window['-TAPE_DETAIL_NOTES-'].update('', disabled=True)
+                
+                # Disable buttons
+                self.window['-EDIT_TAPE-'].update(disabled=True)
+                self.window['-DELETE_TAPE-'].update(disabled=True)
+                self.window['-BROWSE_TAPE-'].update(disabled=True)
+    except Exception as e:
+        sg.popup_error('Delete Error', f'Failed to delete tape: {e}')
+
+def handle_browse_tape(self, values):
+    """Handle browse tape button click."""
+    try:
+        selected_rows = values['-TAPE_LIST-']
+        if not selected_rows:
+            sg.popup('Please select a tape to browse')
+            return
+        
+        table_data = self.window['-TAPE_LIST-'].get()
+        tape_label = table_data[selected_rows[0]][0]
+        
+        # Open tape browser for specific tape
+        self.tape_browser.run_browser_interface(tape_filter=tape_label)
+    except Exception as e:
+        sg.popup_error('Browse Error', f'Failed to browse tape: {e}')
+
+def handle_export_inventory(self):
+    """Handle export inventory button click."""
+    try:
+        export_path = sg.popup_get_file(
+            'Export Tape Inventory',
+            save_as=True,
+            file_types=[('CSV Files', '*.csv'), ('JSON Files', '*.json')],
+            default_extension='.csv'
+        )
+        
+        if export_path:
+            if export_path.lower().endswith('.json'):
+                self.db_manager.export_inventory_json(export_path)
+            else:
+                self.db_manager.export_inventory_csv(export_path)
             
-            table_data = self.window['-TAPE_LIST-'].get()
-            tape_label = table_data[selected_rows[0]][0]
-            
-            # Confirm deletion
+            sg.popup(f'Inventory exported to: {export_path}')
+    except Exception as e:
+        sg.popup_error('Export Error', f'Failed to export inventory: {e}')
+
+def handle_import_data(self):
+    """Handle import data button click."""
+    try:
+        import_path = sg.popup_get_file(
+            'Import Data',
+            file_types=[('CSV Files', '*.csv'), ('JSON Files', '*.json')]
+        )
+        
+        if import_path:
             result = sg.popup_yes_no(
-                f'Are you sure you want to delete tape "{tape_label}"?\n'
-                'This will remove all associated archive and file records.',
-                title='Confirm Deletion'
+                f'Import data from {import_path}?\n'
+                'This may overwrite existing data.',
+                title='Confirm Import'
             )
             
             if result == 'Yes':
-                tape = self.db_manager.find_tape_by_label(tape_label)
-                if tape:
-                    self.db_manager.delete_tape(tape['tape_id'])
-                    sg.popup('Tape deleted successfully')
-                    self.update_tape_list()
-                    self.populate_recovery_tapes()
-                    self.populate_search_tapes()
-                    
-                    # Clear details
-                    self.window['-TAPE_DETAIL_LABEL-'].update('', disabled=True)
-                    self.window['-TAPE_DETAIL_STATUS-'].update('', disabled=True)
-                    self.window['-TAPE_DETAIL_NOTES-'].update('', disabled=True)
-                    
-                    # Disable buttons
-                    self.window['-EDIT_TAPE-'].update(disabled=True)
-                    self.window['-DELETE_TAPE-'].update(disabled=True)
-                    self.window['-BROWSE_TAPE-'].update(disabled=True)
-        except Exception as e:
-            sg.popup_error('Delete Error', f'Failed to delete tape: {e}')
-    
-    def handle_browse_tape(self, values):
-        """Handle browse tape button click."""
-        try:
-            selected_rows = values['-TAPE_LIST-']
-            if not selected_rows:
-                sg.popup('Please select a tape to browse')
-                return
-            
-            table_data = self.window['-TAPE_LIST-'].get()
-            tape_label = table_data[selected_rows[0]][0]
-            
-            # Open tape browser for specific tape
-            self.tape_browser.run_browser_interface(tape_filter=tape_label)
-        except Exception as e:
-            sg.popup_error('Browse Error', f'Failed to browse tape: {e}')
-    
-    def handle_export_inventory(self):
-        """Handle export inventory button click."""
-        try:
-            export_path = sg.popup_get_file(
-                'Export Tape Inventory',
-                save_as=True,
-                file_types=[('CSV Files', '*.csv'), ('JSON Files', '*.json')],
-                default_extension='.csv'
-            )
-            
-            if export_path:
-                if export_path.lower().endswith('.json'):
-                    self.db_manager.export_inventory_json(export_path)
+                if import_path.lower().endswith('.json'):
+                    records_imported = self.db_manager.import_inventory_json(import_path)
                 else:
-                    self.db_manager.export_inventory_csv(export_path)
+                    records_imported = self.db_manager.import_inventory_csv(import_path)
                 
-                sg.popup(f'Inventory exported to: {export_path}')
-        except Exception as e:
-            sg.popup_error('Export Error', f'Failed to export inventory: {e}')
-    
-    def handle_import_data(self):
-        """Handle import data button click."""
-        try:
-            import_path = sg.popup_get_file(
-                'Import Data',
-                file_types=[('CSV Files', '*.csv'), ('JSON Files', '*.json')]
-            )
-            
-            if import_path:
-                result = sg.popup_yes_no(
-                    f'Import data from {import_path}?\n'
-                    'This may overwrite existing data.',
-                    title='Confirm Import'
-                )
-                
-                if result == 'Yes':
-                    if import_path.lower().endswith('.json'):
-                        records_imported = self.db_manager.import_inventory_json(import_path)
-                    else:
-                        records_imported = self.db_manager.import_inventory_csv(import_path)
-                    
-                    sg.popup(f'Successfully imported {records_imported} records')
-                    self.update_tape_list()
-                    self.populate_recovery_tapes()
-                    self.populate_search_tapes()
-        except Exception as e:
-            sg.popup_error('Import Error', f'Failed to import data: {e}')
+                sg.popup(f'Successfully imported {records_imported} records')
+                self.update_tape_list()
+                self.populate_recovery_tapes()
+                self.populate_search_tapes()
+    except Exception as e:
+        sg.popup_error('Import Error', f'Failed to import data: {e}')
+
 
 
 def main():
