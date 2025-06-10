@@ -1,16 +1,18 @@
-# 📼 BackupUSSY - Professional LTO Tape Archive Tool
+# 📼 BackupUSSY v0.1 - Professional LTO Tape Archive Tool
 
 <div align="center">
 
-![Python](https://img.shields.io/badge/python-v3.7+-blue.svg)
+![Version](https://img.shields.io/badge/version-0.1-brightgreen.svg)
 ![Platform](https://img.shields.io/badge/platform-windows-lightgrey.svg)
+![FreeSimpleGUI](https://img.shields.io/badge/FreeSimpleGUI-5.2.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Status](https://img.shields.io/badge/status-stable-brightgreen.svg)
-![Version](https://img.shields.io/badge/version-v1.0-blue.svg)
 
-*A professional Python-based GUI tool for Windows that creates reliable archival backups to LTO tape drives*
+*Professional standalone LTO tape archiving tool - no Python installation required!*
 
-[![Download Latest Release](https://img.shields.io/badge/Download-Latest%20Release-brightgreen?style=for-the-badge&logo=github)](https://github.com/KyleDurepos/backupussy/releases/latest)
+[![Download Latest Release](https://img.shields.io/badge/Download-Latest%20Release-brightgreen?style=for-the-badge&logo=github)](https://github.com/mojomast/backupussy/releases/latest)
+
+**🎉 NEW: Standalone Edition - Extract and Run!**
 
 </div>
 
@@ -23,10 +25,11 @@ BackupUSSY is a comprehensive LTO tape archive solution designed for Windows env
 ## ✨ Key Features
 
 ### 🖥️ **Modern GUI Interface**
-- **🎨 PySimpleGUI**: Intuitive and user-friendly interface
+- **🎨 FreeSimpleGUI**: Intuitive and user-friendly interface
 - **📊 Real-time Progress**: Live progress bars and status updates
 - **🔍 Device Detection**: Automatic LTO device discovery
 - **🎯 One-Click Operation**: Simple workflow for complex operations
+- **📱 Standalone**: No Python installation required
 
 ### 🏗️ **Flexible Archive Modes**
 - **⚡ Stream Mode**: Direct streaming to tape using `tar | dd`
@@ -50,42 +53,40 @@ BackupUSSY is a comprehensive LTO tape archive solution designed for Windows env
 
 ## 🚀 Quick Start
 
-### Option 1: Download from GitHub (Recommended)
+### **Standalone Edition (Recommended) - No Python Required!**
 
-[![Download Latest Release](https://img.shields.io/github/release/KyleDurepos/backupussy.svg?style=flat-square)](https://github.com/KyleDurepos/backupussy/releases/latest)
+[![Download Latest Release](https://img.shields.io/github/release/mojomast/backupussy.svg?style=flat-square)](https://github.com/mojomast/backupussy/releases/latest)
 
-1. Go to [Releases](https://github.com/KyleDurepos/backupussy/releases)
-2. Download the latest `backupussy-vX.X.zip`
-3. Extract to desired location
-4. Run installation:
-   ```powershell
-   # For complete setup (requires Administrator)
-   .\install.ps1
-   
-   # Or basic setup (no admin required)
-   install.bat
-   ```
-5. Launch the application:
-   ```cmd
-   run.bat
-   ```
+1. Go to [Releases](https://github.com/mojomast/backupussy/releases)
+2. Download `BackupUSSY-standalone-v0.1.zip`
+3. Extract to any location (e.g., `C:\BackupUSSY`)
+4. **That's it!** Double-click `Launch-BackupUSSY.bat`
 
-### Option 2: Clone from GitHub
+**✅ Zero installation required**  
+**✅ No Python needed**  
+**✅ All dependencies bundled**  
+**✅ Works immediately**
+
+### For Developers: Source Code
 
 ```bash
-git clone https://github.com/KyleDurepos/backupussy.git
+git clone https://github.com/mojomast/backupussy.git
 cd backupussy
 .\install.ps1
 ```
 
 ## 📋 System Requirements
 
-### Minimum Requirements
+### Standalone Version (Recommended)
 - **OS**: Windows 10/11 (64-bit)
-- **Python**: 3.7 or higher
 - **RAM**: 4GB (8GB recommended for large archives)
-- **Storage**: 1GB free space (more for cached mode)
+- **Storage**: 20MB for application + space for archives
 - **Hardware**: LTO tape drive connected via SCSI/SAS/Fibre Channel
+- **Dependencies**: None! Everything is bundled
+
+### Source Version (For Developers)
+- **Python**: 3.7 or higher
+- **Additional tools**: MSYS2 or GNU tar/dd
 
 ### Supported LTO Drives
 - LTO-4, LTO-5, LTO-6, LTO-7, LTO-8, LTO-9
@@ -93,30 +94,21 @@ cd backupussy
 
 ## 🛠️ Installation
 
-### Automated Installation (Recommended)
+### Standalone Version (Zero-Setup)
 
-The automated installer handles all dependencies and configuration:
+**Download and Run:**
+1. Download `BackupUSSY-standalone-v0.1.zip` from [releases](https://github.com/mojomast/backupussy/releases)
+2. Extract anywhere you want
+3. Double-click `Launch-BackupUSSY.bat`
+4. **Done!** BackupUSSY is ready to use
 
-**Complete Setup** (includes MSYS2 - requires Administrator):
-```powershell
-# Right-click PowerShell -> "Run as Administrator"
-.\install.ps1
-```
-
-**Basic Setup** (Python only - no admin required):
-```cmd
-install.bat
-```
-
-**The installer will:**
-- ✅ Verify Python installation
-- ✅ Download and install MSYS2 (if run as admin)
-- ✅ Install required packages (tar, dd, mt)
-- ✅ Create Python virtual environment
-- ✅ Install Python dependencies
-- ✅ Initialize SQLite database
-- ✅ Run comprehensive functionality tests
-- ✅ Configure system PATH
+**What's included:**
+- ✅ BackupUSSY.exe (compiled application)
+- ✅ dd.exe, tar.exe, gzip.exe (bundled tools)
+- ✅ All required DLLs
+- ✅ Launch scripts
+- ✅ Complete documentation
+- ✅ License compliance files
 
 ### Manual Installation
 
@@ -354,15 +346,16 @@ python src/main.py --check-deps
 ## 🏆 Features & Capabilities
 
 ### ✅ **Completed Features**
-- ✅ **GUI Interface**: Complete PySimpleGUI application
+- ✅ **Standalone Application**: No Python installation required
+- ✅ **Modern GUI Interface**: Complete FreeSimpleGUI application
 - ✅ **Archive Modes**: Stream and cached with compression
 - ✅ **Dual Tape Support**: Primary and backup copies
 - ✅ **Database System**: SQLite with full indexing
 - ✅ **Search & Recovery**: Advanced file search and recovery
 - ✅ **Tape Management**: Browse, verify, and manage tapes
 - ✅ **Comprehensive Logging**: Multiple logging levels and formats
-- ✅ **Test Coverage**: Full test suite with validation
-- ✅ **Automated Installation**: One-click setup process
+- ✅ **Bundled Dependencies**: dd, tar, gzip included
+- ✅ **Zero-Setup Distribution**: Extract and run
 
 ### 🔮 **Future Enhancements**
 - 📱 Web interface for remote management
@@ -388,8 +381,7 @@ Contributions are welcome! Please feel free to:
 ## 📞 Support
 
 For support, bug reports, or feature requests:
-- **GitHub Issues**: [Create an issue](https://github.com/KyleDurepos/backupussy/issues)
-- **Email**: support@example.com
+- **GitHub Issues**: [Create an issue](https://github.com/mojomast/backupussy/issues)
 - **Documentation**: This README and inline code comments
 
 ## 📜 License
@@ -398,16 +390,16 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 🏷️ Version History
 
-### **v1.0.0** - Initial Release
-- Complete GUI application with PySimpleGUI
+### **v0.1** - Initial Release
+- Complete standalone application (no Python required)
+- Modern GUI with FreeSimpleGUI
 - Stream and cached archive modes with compression
 - Dual tape support for redundancy
 - SQLite database with full indexing
 - Advanced search and recovery capabilities
 - Comprehensive logging and monitoring
-- Automated installation and setup
-- Full test coverage and validation
-- Professional documentation and user guides
+- Bundled dependencies (dd, tar, gzip)
+- Zero-setup distribution
 
 ---
 

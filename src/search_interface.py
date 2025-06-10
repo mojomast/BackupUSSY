@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Search Interface - GUI for searching and browsing archived content.
-Phase 2.3.1 - Search functionality for LTO Tape Archive Tool.
+BackupUSSY Search Interface
+GUI for searching and browsing archived content.
 """
 
 import os
@@ -11,11 +11,12 @@ from typing import List, Dict, Optional, Any, Callable
 from pathlib import Path
 
 try:
-    import PySimpleGUI as sg
+    import FreeSimpleGUI as sg
 except ImportError:
-    print("PySimpleGUI not installed. Please run: pip install PySimpleGUI")
+    print("FreeSimpleGUI not installed. Please run: pip install FreeSimpleGUI")
     exit(1)
 
+from version import SEARCH_WINDOW_TITLE
 from database_manager import DatabaseManager
 from recovery_manager import RecoveryManager
 
@@ -101,7 +102,7 @@ class SearchInterface:
         ]
         
         self.search_window = sg.Window(
-            'Archive Search & Recovery',
+            SEARCH_WINDOW_TITLE,
             layout,
             size=(1000, 700),
             resizable=True,

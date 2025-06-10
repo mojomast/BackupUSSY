@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Advanced Search Features - Enhanced search capabilities for LTO Tape Archive Tool.
-Phase 2.3.2 - Advanced filtering, regex, and specialized search options.
+BackupUSSY Advanced Search
+Enhanced search capabilities with filtering, regex, and specialized options.
 """
 
 import os
@@ -12,11 +12,12 @@ from typing import List, Dict, Optional, Any, Callable, Union, Tuple
 from pathlib import Path
 
 try:
-    import PySimpleGUI as sg
+    import FreeSimpleGUI as sg
 except ImportError:
-    print("PySimpleGUI not installed. Please run: pip install PySimpleGUI")
+    print("FreeSimpleGUI not installed. Please run: pip install FreeSimpleGUI")
     exit(1)
 
+from version import ADVANCED_SEARCH_TITLE
 from database_manager import DatabaseManager
 from search_interface import SearchInterface
 
@@ -608,7 +609,7 @@ class AdvancedSearchGUI:
         ]
         
         self.window = sg.Window(
-            'Advanced Search',
+            ADVANCED_SEARCH_TITLE,
             layout,
             size=(900, 800),
             resizable=True,

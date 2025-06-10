@@ -1,3 +1,3 @@
-﻿# PySimpleGUI - Install from private server
-# Run: pip install --extra-index-url https://PySimpleGUI.net/install PySimpleGUI
-PySimpleGUI>=5.0.10
+# FreeSimpleGUI - Free, open-source fork of PySimpleGUI
+# Maintains API compatibility while being freely available
+FreeSimpleGUI>=5.0.0

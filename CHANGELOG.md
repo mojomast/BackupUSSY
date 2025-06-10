@@ -14,10 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Incremental backup support
 - Network tape library integration
 
-## [1.0.0] - 2025-06-09
+## [0.1] - 2025-06-10
 
-### Added
-- **Complete GUI Application**: PySimpleGUI-based interface with modern design
+### Added - Standalone Edition
+- **FreeSimpleGUI Interface**: Modern tabbed interface with professional design
+- **Bundled Dependencies**: dd.exe, tar.exe, gzip.exe included (no external installs)
+- **Zero-Setup Distribution**: Extract and run - no installation required
 - **Dual Archive Modes**: 
   - Stream mode for direct tape writing
   - Cached mode with SHA256 verification
@@ -28,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Recovery System**: Comprehensive file and folder recovery tools
 - **Dual Tape Support**: Create primary and backup copies automatically
 - **Compression Support**: Optional gzip compression for space efficiency
+- **License Compliance**: GPL v3 compliance for bundled GNU tools
 - **Comprehensive Logging**: 
   - Individual job logs with detailed progress
   - Cumulative CSV logging for analysis

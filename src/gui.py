@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-GUI Application - PySimpleGUI interface for the LTO Tape Archive Tool.
+BackupUSSY - Professional LTO Tape Archive Tool
+GUI Application using FreeSimpleGUI interface
 """
 
 import os
@@ -10,11 +11,12 @@ import logging
 from pathlib import Path
 
 try:
-    import PySimpleGUI as sg
+    import FreeSimpleGUI as sg
 except ImportError:
-    print("PySimpleGUI not installed. Please run: pip install PySimpleGUI")
+    print("FreeSimpleGUI not installed. Please run: pip install FreeSimpleGUI")
     exit(1)
 
+from version import *
 from main import DependencyManager
 from archive_manager import ArchiveManager
 from tape_manager import TapeManager
@@ -25,7 +27,7 @@ from search_interface import SearchInterface
 from advanced_search import AdvancedSearchManager, AdvancedSearchGUI
 from tape_browser import TapeBrowser
 
-# Configure PySimpleGUI theme
+# Configure FreeSimpleGUI theme
 sg.theme('DarkBlue3')
 
 class LTOArchiveGUI:
@@ -71,12 +73,12 @@ class LTOArchiveGUI:
                 [sg.Tab('Search', search_tab, key='-TAB_SEARCH-')],
                 [sg.Tab('Management', manage_tab, key='-TAB_MANAGE-')]
             ], expand_x=True, expand_y=True)],
-            [sg.StatusBar('Ready - LTO Tape Archive Tool', key='-MAIN_STATUS-', size=(80, 1))],
+            [sg.StatusBar(READY_MESSAGE, key='-MAIN_STATUS-', size=(80, 1))],
             [sg.Button('Exit', key='-EXIT-', size=(10, 1))]
         ]
         
         self.window = sg.Window(
-            'LTO Tape Archive Tool - Professional Edition',
+            MAIN_WINDOW_TITLE,
             layout,
             size=(1200, 800),
             resizable=True,
@@ -368,7 +370,7 @@ class LTOArchiveGUI:
             
             # Initialize database and recovery components
             self.db_manager = DatabaseManager()
-            self.recovery_manager = RecoveryManager(self.db_manager)
+            self.recovery_manager = RecoveryManager(self.dep_manager, self.db_manager)
             
             # Initialize search and browser components
             self.search_interface = SearchInterface(self.db_manager, self.recovery_manager)
@@ -448,7 +450,7 @@ class LTOArchiveGUI:
         ]
         
         self.window = sg.Window(
-            'LTO Tape Archive Tool',
+            MAIN_WINDOW_TITLE,
             layout,
             resizable=True,
             finalize=True
@@ -615,7 +617,7 @@ class LTOArchiveGUI:
     
     def run(self):
         """Main GUI event loop with tabbed interface support."""
-        self.update_log("LTO Archive Tool Professional Edition ready")
+        self.update_log(INIT_MESSAGE)
         self.populate_recovery_tapes()
         self.populate_search_tapes()
         self.update_management_stats()

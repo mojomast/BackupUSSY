@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Tape Browser - Hierarchical browsing interface for LTO Tape Archive Tool.
-Phase 2.3.3 - Tree view navigation for tapes, archives, and files.
+BackupUSSY Tape Browser
+Hierarchical browsing interface for LTO tape library management.
 """
 
 import os
@@ -11,11 +11,12 @@ from typing import List, Dict, Optional, Any, Tuple
 from pathlib import Path
 
 try:
-    import PySimpleGUI as sg
+    import FreeSimpleGUI as sg
 except ImportError:
-    print("PySimpleGUI not installed. Please run: pip install PySimpleGUI")
+    print("FreeSimpleGUI not installed. Please run: pip install FreeSimpleGUI")
     exit(1)
 
+from version import BROWSER_WINDOW_TITLE
 from database_manager import DatabaseManager
 from recovery_manager import RecoveryManager
 
@@ -138,7 +139,7 @@ class TapeBrowser:
         ]
         
         self.browser_window = sg.Window(
-            'LTO Tape Library Browser',
+            BROWSER_WINDOW_TITLE,
             layout,
             size=(1000, 700),
             resizable=True,
