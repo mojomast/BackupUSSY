@@ -253,62 +253,115 @@ class DatabaseManager:
             logger.error(f"Failed to add files: {e}")
             raise
     
-    def search_files(self, query: str, file_type: Optional[str] = None, 
-                    tape_id: Optional[int] = None, date_from: Optional[datetime] = None,
-                    date_to: Optional[datetime] = None) -> List[Dict[str, Any]]:
-        """Search for files across all archives.
-        
+    def search(self, query: str, search_type: str = 'file', filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """Perform a search across the database.
+
         Args:
-            query: Search term for file paths (supports wildcards with %)
-            file_type: Optional file extension filter (e.g., '.jpg')
-            tape_id: Optional tape ID to limit search
-            date_from: Optional start date filter
-            date_to: Optional end date filter
-            
+            query: The search term.
+            search_type: Type of item to search for ('file', 'archive', 'tape').
+            filters: A dictionary of additional filters.
+
         Returns:
-            List of file records with archive and tape information
+            A list of dictionaries representing the search results.
         """
+        if search_type == 'file':
+            return self._search_files(query, filters)
+        elif search_type == 'archive':
+            return self._search_archives(query, filters)
+        elif search_type == 'tape':
+            return self._search_tapes(query, filters)
+        else:
+            logger.warning(f"Invalid search type: {search_type}")
+            return []
+
+    def _search_files(self, query: str, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """Search for files."""
+        filters = filters or {}
         try:
             with sqlite3.connect(self.db_path) as conn:
-                conn.row_factory = sqlite3.Row  # Enable column access by name
+                conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
-                
-                # Build dynamic query
-                sql = """
-                    SELECT f.file_id, f.file_path, f.file_size_bytes, f.file_modified, f.file_type,
-                           a.archive_id, a.archive_name, a.source_folder, a.archive_date,
-                           t.tape_id, t.tape_label, t.tape_device
+
+                sql_query = """
+                    SELECT f.file_path, f.file_size_bytes, f.file_modified, 
+                           a.archive_name, t.tape_label, f.file_type
                     FROM files f
                     JOIN archives a ON f.archive_id = a.archive_id
                     JOIN tapes t ON a.tape_id = t.tape_id
                     WHERE f.file_path LIKE ?
                 """
-                
-                params = [f"%{query}%"]
-                
-                if file_type:
-                    sql += " AND f.file_type = ?"
-                    params.append(file_type)
-                
-                if tape_id:
-                    sql += " AND t.tape_id = ?"
-                    params.append(tape_id)
-                
-                if date_from:
-                    sql += " AND f.file_modified >= ?"
-                    params.append(date_from)
-                
-                if date_to:
-                    sql += " AND f.file_modified <= ?"
-                    params.append(date_to)
-                
-                sql += " ORDER BY f.file_path"
-                
-                cursor.execute(sql, params)
-                results = [dict(row) for row in cursor.fetchall()]
-                
-                logger.info(f"Found {len(results)} files matching query: '{query}'")
-                return results
+                params = [f'%{query}%']
+
+                if filters.get('file_type') and filters['file_type'] != 'All Types':
+                    sql_query += " AND f.file_type = ?"
+                    params.append(filters['file_type'])
+                if filters.get('tape_id'):
+                    sql_query += " AND a.tape_id = ?"
+                    params.append(filters['tape_id'])
+                if filters.get('date_from'):
+                    sql_query += " AND f.file_modified >= ?"
+                    params.append(filters['date_from'])
+                if filters.get('date_to'):
+                    sql_query += " AND f.file_modified <= ?"
+                    params.append(filters['date_to'])
+
+                sql_query += " ORDER BY f.file_modified DESC"
+                cursor.execute(sql_query, params)
+                return [dict(row) for row in cursor.fetchall()]
+        except sqlite3.Error as e:
+            logger.error(f"File search failed: {e}")
+            return []
+
+    def _search_archives(self, query: str, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """Search for archives."""
+        filters = filters or {}
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+
+                sql_query = """
+                    SELECT a.archive_id, a.archive_name, a.archive_date, a.archive_size_bytes, a.file_count, t.tape_label
+                    FROM archives a
+                    JOIN tapes t ON a.tape_id = t.tape_id
+                    WHERE a.archive_name LIKE ?
+                """
+                params = [f'%{query}%']
+
+                if filters.get('tape_id'):
+                    sql_query += " AND a.tape_id = ?"
+                    params.append(filters['tape_id'])
+                if filters.get('date_from'):
+                    sql_query += " AND a.archive_date >= ?"
+                    params.append(filters['date_from'])
+                if filters.get('date_to'):
+                    sql_query += " AND a.archive_date <= ?"
+                    params.append(filters['date_to'])
+
+                sql_query += " ORDER BY a.archive_date DESC"
+                cursor.execute(sql_query, params)
+                return [dict(row) for row in cursor.fetchall()]
+        except sqlite3.Error as e:
+            logger.error(f"Archive search failed: {e}")
+            return []
+
+    def _search_tapes(self, query: str, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """Search for tapes."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+
+                sql_query = "SELECT * FROM tapes WHERE tape_label LIKE ? OR notes LIKE ?"
+                params = [f'%{query}%', f'%{query}%']
+
+                sql_query += " ORDER BY last_written DESC"
+                cursor.execute(sql_query, params)
+                return [dict(row) for row in cursor.fetchall()]
+        except sqlite3.Error as e:
+            logger.error(f"Tape search failed: {e}")
+            return []
+
                 
         except sqlite3.Error as e:
             logger.error(f"Failed to search files: {e}")
@@ -556,7 +609,7 @@ class DatabaseManager:
                     LEFT JOIN files f ON a.archive_id = f.archive_id
                     GROUP BY t.tape_id
                     ORDER BY t.created_date DESC
-                """)
+                """ )
                 
                 tapes = [dict(row) for row in cursor.fetchall()]
                 
@@ -566,6 +619,50 @@ class DatabaseManager:
         except sqlite3.Error as e:
             logger.error(f"Failed to get tape list: {e}")
             raise
+
+    def get_all_archives(self, tape_id: Optional[int] = None, limit: int = 50) -> List[Dict[str, Any]]:
+        """
+        Get a list of all archives, optionally filtered by tape.
+
+        Args:
+            tape_id: Optional tape ID to filter by.
+            limit: Maximum number of archives to return.
+
+        Returns:
+            List of archive records.
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+
+                query = """
+                    SELECT
+                        a.archive_id,
+                        a.archive_name,
+                        a.archive_date,
+                        a.archive_size_bytes,
+                        a.file_count,
+                        t.tape_label
+                    FROM archives a
+                    JOIN tapes t ON a.tape_id = t.tape_id
+                """
+                params = []
+
+                if tape_id:
+                    query += " WHERE a.tape_id = ?"
+                    params.append(tape_id)
+
+                query += " ORDER BY a.archive_date DESC LIMIT ?"
+                params.append(limit)
+
+                cursor.execute(query, params)
+                archives = [dict(row) for row in cursor.fetchall()]
+                logger.info(f"Retrieved {len(archives)} archives.")
+                return archives
+        except sqlite3.Error as e:
+            logger.error(f"Failed to get all archives: {e}")
+            return []
     
     def get_database_stats(self) -> Dict[str, int]:
         """Get database statistics.

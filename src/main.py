@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import logging
 from pathlib import Path
+from exceptions import DependencyError
 
 # Configure logging
 log_dir = Path(__file__).parent.parent / 'logs'
@@ -67,7 +68,7 @@ class DependencyManager:
         else:
             logger.warning("mt executable not found - tape rewinding may not work")
         
-        return self.validate_dependencies()
+        self.validate_dependencies()
     
     def _find_executable(self, name):
         """Find executable in PATH or bundled locations."""
@@ -107,8 +108,9 @@ class DependencyManager:
             missing.append('dd')
         
         if missing:
-            logger.error(f"Missing required dependencies: {', '.join(missing)}")
-            return False
+            error_message = f"Missing required dependencies: {', '.join(missing)}. Please install MSYS2 or ensure they are in your system's PATH."
+            logger.error(error_message)
+            raise DependencyError(error_message)
         
         logger.info("All required dependencies found")
         return True
@@ -124,11 +126,12 @@ class DependencyManager:
 if __name__ == "__main__":
     # Test dependency detection
     dep_manager = DependencyManager()
-    if dep_manager.detect_dependencies():
+    try:
+        dep_manager.detect_dependencies()
         print("Dependencies OK:")
         for name, path in dep_manager.get_dependency_info().items():
             print(f"  {name}: {path or 'Not found'}")
-    else:
-        print("Missing dependencies. Please install MSYS2 or add tar/dd to PATH.")
+    except DependencyError as e:
+        print(f"Error: {e}")
         sys.exit(1)
 

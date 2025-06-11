@@ -2,3 +2,4 @@
 # Maintains API compatibility while being freely available
 FreeSimpleGUI==5.2.0
 WMI==1.5.1
+argcomplete==3.2.1

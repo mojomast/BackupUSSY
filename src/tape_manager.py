@@ -48,19 +48,18 @@ class TapeManager:
             except Exception as e:
                 logger.warning(f"WMI tape detection failed: {e}")
         
-        # Method 2: Check common Windows tape device names
+        # Method 2: Check common Windows tape device names (only if they actually exist)
         for i in range(8):  # Check Tape0 through Tape7
             device = f"\\.\\Tape{i}"
-            if device not in devices and self._test_device_access(device):
+            if device not in devices and self._test_device_access_real(device):
                 devices.append(device)
+                logger.info(f"Found accessible tape device: {device}")
         
-        # Method 3: Always include Tape0-Tape3 as fallback (most common)
-        common_devices = ["\\.\\Tape0", "\\.\\Tape1", "\\.\\Tape2", "\\.\\Tape3"]
-        for common_device in common_devices:
-            if common_device not in devices:
-                devices.append(common_device)
-        
-        logger.info("Added common tape devices as fallback options")
+        # Don't add fake fallback devices - only report what actually exists
+        if not devices:
+            logger.info("No tape devices detected on this system")
+        else:
+            logger.info(f"Detected {len(devices)} real tape devices")
         
         logger.info(f"Found {len(devices)} tape devices: {devices}")
         return devices
@@ -100,6 +99,54 @@ class TapeManager:
             
         except Exception as e:
             logger.debug(f"Device access test failed for {device}: {e}")
+            return False
+    
+    def _test_device_access_real(self, device):
+        """Test if a tape device actually exists (no fake fallbacks)."""
+        try:
+            # Try win32file for proper device testing if available
+            try:
+                import win32file
+                handle = win32file.CreateFile(
+                    device,
+                    0,  # No access requested - just test existence
+                    win32file.FILE_SHARE_READ | win32file.FILE_SHARE_WRITE,
+                    None,
+                    win32file.OPEN_EXISTING,
+                    0,
+                    None
+                )
+                win32file.CloseHandle(handle)
+                logger.debug(f"Device {device} confirmed to exist via win32file")
+                return True
+            except ImportError:
+                # win32file not available, try alternative method
+                pass
+            except Exception as e:
+                logger.debug(f"Device {device} does not exist: {e}")
+                return False
+            
+            # Alternative: Try opening the device file directly (Windows)
+            try:
+                with open(device, 'rb') as f:
+                    # If we can open it, it exists
+                    logger.debug(f"Device {device} confirmed to exist via direct open")
+                    return True
+            except (FileNotFoundError, PermissionError) as e:
+                # FileNotFoundError = device doesn't exist
+                # PermissionError = device exists but we can't access it (still counts as existing)
+                if isinstance(e, PermissionError):
+                    logger.debug(f"Device {device} exists but access denied (expected for tape devices)")
+                    return True
+                else:
+                    logger.debug(f"Device {device} does not exist: {e}")
+                    return False
+            except Exception as e:
+                logger.debug(f"Device {device} access test failed: {e}")
+                return False
+                
+        except Exception as e:
+            logger.debug(f"Real device access test failed for {device}: {e}")
             return False
     
     def get_tape_status(self, device=None):

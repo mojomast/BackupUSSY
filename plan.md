@@ -314,8 +314,8 @@ backupussy status dependencies
 
 ---
 
-*Last Updated: 2025-06-11T21:06:00Z*  
-*Next Update: After test fixes completion*
+*Last Updated: 2025-06-11T21:45:00Z*  
+*Next Update: Final polish and deployment*
 
 ---
 
@@ -501,11 +501,47 @@ tests/integration/test_cli_basic.py::test_backupussy_manage_config_generate_crea
 #### **For Next Agent - Code Fix Checklist:**
 
 **Priority 1: Fix BaseCommand Integration**
-- [ ] Fix `confirm_action` method in `src/cli_commands/base.py` (line 93)
+- [x] Fix `confirm_action` method in `src/cli_commands/base.py` (line 93) - Updated to take `args` for `--force` flag, added `Namespace` type hint, and included `EOFError`/`KeyboardInterrupt` handling.
   - Replace `self.cli` references with manager-based approach
   - Update method to work with new architecture
-- [ ] Verify all command classes use new manager structure consistently
+- [x] Verify all command classes use new manager structure consistently
+  - [x] `SearchCommand` in `src/cli_commands/search.py` updated to use `managers` in `__init__`.
+  - [x] `ArchiveCommand` in `src/cli_commands/archive.py` inherits `__init__` from `BaseCommand`, which correctly uses `managers`.
+  - [x] `ManageCommand` in `src/cli_commands/manage.py` inherits `__init__` from `BaseCommand`, which correctly uses `managers`.
+  - [x] `MenuCommand` in `src/cli_commands/menu.py` correctly uses `managers` in its `__init__`.
+  - [x] `RecoverCommand` in `src/cli_commands/recover.py` inherits `__init__` from `BaseCommand`, which correctly uses `managers`.
+  - [x] `StatusCommand` in `src/cli_commands/status.py` inherits `__init__` from `BaseCommand`, which correctly uses `managers`.
 - [ ] Ensure menu system integration works properly
+  - [x] `MenuCommand._wizard_first_setup`: Updated mock `ConfigArgs` for `ManageCommand` call.
+  - [ ] `MenuCommand._handle_archive_menu`:
+    - [x] `_create_archive_wizard`: Ensured `CreateArchiveArgs` sets `archive_action = 'create'`.
+    - [x] `_handle_list_archives`: Corrected to use `ArchiveCommand` and set `archive_action = 'list'`.
+    - [x] `_handle_estimate_archive`: Updated `Args` to use `archive_action = 'estimate'`, `source_paths` list, and `compression`.
+    - [x] `_handle_list_jobs`: Updated `Args` to use `archive_action = 'jobs'`.
+    - [x] `_handle_cancel_job`: Updated `Args` to use `archive_action = 'cancel'`.
+  - [ ] `MenuCommand._handle_recover_menu`:
+    - [x] `_handle_browse_archive`: Updated `Args` to use `recover_action = 'files'` and `archive_id`.
+    - [x] `_handle_extract_full`: Updated `Args` to use `recover_action = 'archive'` and correct parameter names (`archive_id`, `destination_path`).
+    - [x] `_handle_extract_selective`: Updated `Args` to use `recover_action = 'archive'` and correct parameter names (`archive_id`, `destination_path`, `files`).
+    - [x] `_handle_verify_archive`: Updated `Args` to use `recover_action = 'verify'` and `archive_id`.
+  - [ ] `MenuCommand._show_search_menu` / `_handle_search_*`:
+    - [x] `_handle_search_filename`: Updated `Args` to set `name` from pattern and `query` to `None`.
+    - [x] `_handle_search_content`: Updated `Args` to set `content` from pattern and `query` to `None`.
+    - [x] `_handle_search_advanced`: Reconstructed `SearchCommand` instantiation and `Args` class, setting specific criteria and `query` to `None`.
+    - [x] `_handle_search_tape`: Updated `Args` to set `tape`, optional `name`, and `query` to `None`.
+    - [x] `_handle_export_search`: Updated `Args` to use `query` for general pattern, other criteria to `None`, and set `export` path.
+  - [ ] `MenuCommand._show_manage_menu` / `_handle_*_management` / `_handle_statistics` / `_handle_configuration`:
+    - [x] `_handle_tape_management`: Updated `Args` for all sub-actions (list, add, update, remove, info) to use `manage_action='tapes'` and `tape_action`.
+    - [x] `_handle_device_management`: Updated `Args` to use `manage_action='devices'` and `device_action='list'`.
+    - [x] `_handle_database_management`: Updated `Args` for sub-actions to use `manage_action='database'` and `db_action`.
+    - [x] `_handle_statistics`: Updated `Args` to use `manage_action='stats'`.
+    - [x] `_handle_configuration`: Restored and Updated `Args` for 'generate' and 'show' to use `manage_action='config'` and `config_action`.
+  - [ ] `MenuCommand._show_status_menu` / `_handle_*_status`:
+    - [x] `_handle_system_status`: Updated `Args` to use `status_action = None` (for general overview).
+    - [x] `_handle_device_status`: Updated `Args` to use `status_action = 'devices'` (manual edit by user).
+    - [x] `_handle_operations_status`: Updated `Args` to use `status_action = 'jobs'`.
+    - [ ] `_handle_dependency_status`: Update `Args` to use `status_action = 'dependencies'` (USER TO PERFORM MANUAL EDIT).
+    - [x] `_handle_database_status`: Updated `Args` to use `status_action = 'database'` (manual edit by user).
 
 **Priority 2: Fix CLI Utilities API Consistency**
 - [ ] Review and implement missing `ConfigManager` methods:

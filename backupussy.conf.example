@@ -1,0 +1,79 @@
+# Backupussy Configuration File
+# This file contains configuration options for the Backupussy LTO backup system.
+# All options have sensible defaults, so you only need to uncomment and modify
+# the settings you want to change.
+
+[general]
+# Default tape device to use when none specified
+# default_device = /dev/st0
+
+# Enable compression by default
+# default_compression = true
+
+# Default number of tape copies
+# default_copies = 1
+
+# Default archive mode (stream or cached)
+# default_mode = cached
+
+# Maximum tape capacity in GB (LTO-7 = 6000)
+# max_tape_capacity_gb = 6000
+
+# Progress update interval in seconds
+# progress_update_interval = 0.1
+
+[database]
+# Database file path (relative to application directory or absolute)
+# path = data/backupussy.db
+
+# How often to backup the database (days)
+# backup_interval_days = 7
+
+# Whether to vacuum database on startup
+# vacuum_on_startup = false
+
+[logging]
+# Logging level (DEBUG, INFO, WARNING, ERROR)
+# level = INFO
+
+# Enable log file rotation
+# file_rotation = true
+
+# Maximum number of log files to keep
+# max_log_files = 10
+
+# Maximum log file size in MB
+# max_log_size_mb = 50
+
+[archive]
+# Temporary directory for archive creation (empty = system temp)
+# temp_dir = 
+
+# Verify checksums during archive creation
+# verify_checksums = true
+
+# Index files in database by default
+# index_files_by_default = true
+
+# Compression level (1-9, 6 is good balance)
+# compression_level = 6
+
+[recovery]
+# Verify recovered files by default
+# verify_by_default = true
+
+# Preserve directory structure by default
+# preserve_structure_by_default = true
+
+# Buffer size for recovery operations (MB)
+# buffer_size_mb = 64
+
+[search]
+# Default search result limit
+# default_limit = 1000
+
+# Case sensitive searches by default
+# case_sensitive = false
+
+# Use regular expressions by default
+# use_regex = false

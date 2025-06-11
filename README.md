@@ -1,8 +1,8 @@
-# 📼 BackupUSSY v0.1.5 - Professional LTO Tape Archive Tool
+# 📼 BackupUSSY v0.2.0 - Professional LTO Tape Archive Tool with Advanced CLI
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-0.1.5-brightgreen.svg)
+![Version](https://img.shields.io/badge/version-0.2.0-brightgreen.svg)
 ![Platform](https://img.shields.io/badge/platform-windows-lightgrey.svg)
 ![FreeSimpleGUI](https://img.shields.io/badge/FreeSimpleGUI-5.2.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
@@ -12,10 +12,11 @@
 
 [![Download Latest Release](https://img.shields.io/badge/Download-Latest%20Release-brightgreen?style=for-the-badge&logo=github)](https://github.com/mojomast/backupussy/releases/latest)
 
-**🎉 Version 0.1: First Official Release**
-*Previous v1.0.x were development builds leading to this stable release*
+**🎉 Version 0.2: Major Terminal Interface Release**
+*Complete command-line interface with interactive menus and professional-grade functionality*
 
-**🎉 NEW: Standalone Edition - Extract and Run!**
+**🎉 NEW: Advanced Terminal Interface with Interactive Menus!**
+**🎉 NEW: Honest Hardware Detection - No More Fake Devices!**
 
 </div>
 
@@ -27,10 +28,12 @@ BackupUSSY is a comprehensive LTO tape archive solution designed for Windows env
 
 ## ✨ Key Features
 
-### 🖥️ **Modern GUI Interface**
-- **🎨 FreeSimpleGUI**: Intuitive and user-friendly interface
-- **📊 Real-time Progress**: Live progress bars and status updates
-- **🔍 Device Detection**: Automatic LTO device discovery
+### 🖥️ **Dual Interface Design**
+- **🎨 Modern GUI**: Intuitive FreeSimpleGUI interface for desktop users
+- **💻 Advanced CLI**: Professional command-line interface for automation
+- **🎯 Interactive Menus**: Beautiful terminal menus for guided operations
+- **📊 Real-time Progress**: Live progress bars in both GUI and CLI
+- **🔍 Honest Hardware Detection**: Only reports real hardware, no fake devices
 - **🎯 One-Click Operation**: Simple workflow for complex operations
 - **📱 Standalone**: No Python installation required
 
@@ -53,6 +56,8 @@ BackupUSSY is a comprehensive LTO tape archive solution designed for Windows env
 - **🔧 Automated Installation**: One-click setup with dependency management
 - **🗃️ Export/Import**: Archive database backup and restore
 - **🧪 Full Test Coverage**: Comprehensive test suite for reliability
+- **💻 Terminal Interface**: Complete CLI with interactive menus and wizards
+- **🔧 Professional Commands**: Full command-line automation support
 
 ## 🚀 Quick Start
 
@@ -159,17 +164,27 @@ python src/test_runner.py
 
 ### Starting the Application
 
-**Standalone Version:**
-- Extract the downloaded zip file
-- Run `BackupUSSY.exe` directly
-
-**Source Version:**
+**GUI Interface (Traditional):**
 ```bash
-# Activate virtual environment
-.venv\Scripts\activate
+# Standalone version
+BackupUSSY.exe
 
-# Run the application
+# Source version
 python src/gui.py
+```
+
+**🆕 Terminal Interface (Recommended for Advanced Users):**
+```bash
+# Interactive menu system
+python src/cli.py menu
+
+# Wizard mode (guided workflows)
+python src/cli.py menu --mode wizard
+
+# Direct commands for automation
+python src/cli.py archive create /path/to/source --device \\.\Tape0 --compress
+python src/cli.py status devices
+python src/cli.py search "*.pdf" --after 2025-01-01
 ```
 
 ### Creating Archives
@@ -213,6 +228,44 @@ python src/gui.py
 - Restore individual files or entire folders
 - Verify tape contents before recovery
 - Progress tracking for large restorations
+
+## 💻 Terminal Interface Features
+
+### 🎯 **Interactive Menu System**
+- **📦 Archive Operations**: Create, estimate, manage archive jobs
+- **🔄 Recovery Operations**: List, browse, extract archives
+- **🔍 Search Operations**: Find files across all archives  
+- **⚙️ System Management**: Tape and database management
+- **📊 System Status**: Real-time system monitoring
+- **🧙 Wizard Mode**: Guided step-by-step workflows
+
+### 🔧 **Professional CLI Commands**
+```bash
+# Archive operations
+python src/cli.py archive create /source --device \\.\Tape0 --compress
+python src/cli.py archive estimate /source
+python src/cli.py archive list-jobs
+
+# Recovery operations  
+python src/cli.py recover list --tape TAPE001
+python src/cli.py recover extract --archive backup.tar.gz --output /restore
+
+# Search operations
+python src/cli.py search "*.pdf" --tape TAPE001 --after 2025-01-01
+python src/cli.py search --export results.csv
+
+# System management
+python src/cli.py manage tapes list
+python src/cli.py manage config generate
+python src/cli.py status devices
+```
+
+### ✨ **Smart Features**
+- **🔍 Honest Hardware Detection**: Only reports real tape devices
+- **🎯 Auto-Device Selection**: Smart device auto-detection 
+- **🛡️ Safe Testing**: Built-in dry-run mode for testing without hardware
+- **📊 Real-time Feedback**: Live progress and status updates
+- **🎨 Beautiful Output**: Color-coded messages and progress bars
 
 ## 📁 Project Structure
 
@@ -384,6 +437,21 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 🏷️ Version History
 
+### **v0.2.0** - Major Terminal Interface Release ⭐
+- **🎉 Complete CLI Interface**: Professional command-line interface with all GUI functionality
+- **🎯 Interactive Menu System**: Beautiful terminal menus with emoji navigation
+- **🧙 Wizard Mode**: Guided step-by-step workflows for complex operations
+- **🔧 Hardware Detection Fix**: Removed fake device detection - only reports real hardware
+- **📊 Status Commands**: Comprehensive system status and device monitoring
+- **🔍 Search Commands**: Advanced search with multiple filters and export
+- **📦 Archive Commands**: Full archive creation, estimation, and management
+- **🔄 Recovery Commands**: Complete recovery system with selective extraction
+- **⚙️ Management Commands**: Tape, device, database, and configuration management
+- **🛡️ Safety Features**: Built-in dry-run mode and confirmation prompts
+- **🎨 User Experience**: Color-coded output, progress bars, and helpful error messages
+- **🧪 Test Suite**: 91% test success rate with comprehensive coverage
+- **📚 Documentation**: Complete command documentation and examples
+
 ### **v0.1.5** - Critical GUI Structure Fixes
 - **Application Startup**: Fixed "LTOArchiveGUI object has no attribute populate_recovery_tapes" error that prevented startup
 - **Method Structure**: Fixed all standalone functions to be proper class methods - resolved 50+ indentation issues
@@ -431,6 +499,12 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ---
 
-**🎉 BackupUSSY is production-ready and fucking awesome! 🎉**
+**🎉 BackupUSSY v0.2.0: Both GUI and CLI are production-ready and fucking awesome! 🎉**
+
+**Choose Your Interface:**
+- 🖥️ **GUI Mode**: `python src/gui.py` - Traditional point-and-click interface
+- 💻 **CLI Mode**: `python src/cli.py menu` - Professional terminal interface
+- 🧙 **Wizard Mode**: `python src/cli.py menu --mode wizard` - Guided workflows
+- 🤖 **Automation**: Direct CLI commands for scripting and automation
 
 *Archive your critical data to LTO tapes with confidence and reliability.*

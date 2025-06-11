@@ -163,12 +163,15 @@ class SearchInterface:
                         pass
             
             # Perform search
-            results = self.db_manager.search_files(
+            results = self.db_manager.search(
                 query=query,
-                file_type=file_type,
-                tape_id=tape_id,
-                date_from=date_from,
-                date_to=date_to
+                search_type='file',
+                filters={
+                    'file_type': file_type,
+                    'tape_id': tape_id,
+                    'date_from': date_from,
+                    'date_to': date_to
+                }
             )
             
             logger.info(f"Found {len(results)} matching files")
