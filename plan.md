@@ -280,7 +280,7 @@ backupussy status dependencies
   - [x] Created unit tests for CLI utilities (`test_cli_utils.py`)
   - [x] Updated pytest configuration with proper markers
   - [x] Added coverage reporting with HTML output
-- [ ] **Test fixes and refinement** 🔧 IN PROGRESS - 21 failed tests identified for fixing
+- [ ] **Code fixes based on test analysis** 🔧 READY FOR IMPLEMENTATION - 21 test failures analyzed with specific fix requirements
 - [ ] Performance optimization and testing
 - [ ] User acceptance testing with menu system
 - [ ] Update documentation with menu system usage
@@ -498,43 +498,53 @@ tests/integration/test_cli_basic.py::test_backupussy_manage_config_generate_crea
 
 ### Next Steps for Test Completion:
 
-#### **For Next Agent - Test Fix Checklist:**
+#### **For Next Agent - Code Fix Checklist:**
 
 **Priority 1: Fix BaseCommand Integration**
 - [ ] Fix `confirm_action` method in `src/cli_commands/base.py` (line 93)
-- [ ] Update all command classes to use new manager structure
-- [ ] Test the fix with menu system
+  - Replace `self.cli` references with manager-based approach
+  - Update method to work with new architecture
+- [ ] Verify all command classes use new manager structure consistently
+- [ ] Ensure menu system integration works properly
 
-**Priority 2: Fix Menu System Tests**
-- [ ] Update mock structure in `test_menu_system.py`
-- [ ] Fix manager dictionary mocking
-- [ ] Add proper CLI context mocking
-- [ ] Verify menu navigation works
+**Priority 2: Fix CLI Utilities API Consistency**
+- [ ] Review and implement missing `ConfigManager` methods:
+  - `get_default_device()` - should return configured default tape device
+  - `get_database_path()` - should return database file location
+  - `get_log_level()` - should return configured logging level
+- [ ] Review and implement missing `ProgressManager` methods:
+  - `show_progress()` - display progress bars/indicators
+  - `print_success()`, `print_error()`, `print_warning()`, `print_info()` - colored output
+- [ ] Ensure API consistency across all utility classes
 
-**Priority 3: Fix CLI Utilities Tests**
-- [ ] Review actual `ConfigManager` API and update tests
-- [ ] Review actual `ProgressManager` API and update tests
-- [ ] Create concrete `BaseCommand` implementation for testing
-- [ ] Fix file cleanup in logging tests
+**Priority 3: Fix Menu System Integration**
+- [ ] Update menu system to properly handle manager dictionary structure
+- [ ] Ensure all menu handlers correctly access backend managers
+- [ ] Fix any remaining dependency injection issues
+- [ ] Verify wizard mode functionality
 
-**Priority 4: Improve Test Coverage**
-- [ ] Add tests for error conditions
-- [ ] Add tests for configuration validation
-- [ ] Add tests for dependency management
-- [ ] Increase coverage above 25%
+**Priority 4: Code Quality Improvements**
+- [ ] Add missing error handling in edge cases
+- [ ] Improve configuration validation
+- [ ] Enhance dependency management robustness
+- [ ] Document any API changes made
 
-### Test Success Metrics:
+**Note:** All test failures have been analyzed and documented above. Focus on fixing the underlying code issues rather than running tests. The test suite will validate fixes when complete.
+
+### Code Quality Targets:
 
 **Current State:**
 - ✅ 68% pass rate on newly created tests
 - ✅ All basic CLI functionality verified working
 - ✅ Menu system confirmed accessible and functional
 - ✅ Code coverage infrastructure in place
+- ✅ All 21 test failures analyzed and documented
 
-**Target State:**
-- 🎯 95%+ pass rate
-- 🎯 50%+ code coverage
-- 🎯 All critical paths tested
-- 🎯 Menu system fully validated
+**Target State (After Code Fixes):**
+- 🎯 Fix all 5 critical BaseCommand integration issues
+- 🎯 Implement missing CLI utility methods (8 methods identified)
+- 🎯 Resolve all menu system dependency injection problems
+- 🎯 Achieve consistent API across all components
+- 🎯 Enable 95%+ test pass rate through code improvements
 
 This comprehensive testing expansion represents a major quality assurance milestone, providing a solid foundation for ensuring the reliability and maintainability of the Backupussy CLI system.
