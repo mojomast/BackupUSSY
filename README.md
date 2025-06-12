@@ -1,14 +1,16 @@
 # 📼 BackupUSSY v0.2.0 - Professional LTO Tape Archive Tool with Advanced CLI
 
+> **⚠️ This project is currently in active development. There is no stable release. All releases are experimental and not ready for production use. Use at your own risk.**
+
 <div align="center">
 
 ![Version](https://img.shields.io/badge/version-0.2.0-brightgreen.svg)
 ![Platform](https://img.shields.io/badge/platform-windows-lightgrey.svg)
 ![FreeSimpleGUI](https://img.shields.io/badge/FreeSimpleGUI-5.2.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
-![Status](https://img.shields.io/badge/status-stable-brightgreen.svg)
+![Status](https://img.shields.io/badge/status-experimental-orange.svg)
 
-*Professional standalone LTO tape archiving tool - no Python installation required!*
+*Experimental standalone LTO tape archiving tool - no Python installation required!*
 
 [![Download Latest Release](https://img.shields.io/badge/Download-Latest%20Release-brightgreen?style=for-the-badge&logo=github)](https://github.com/mojomast/backupussy/releases/latest)
 
@@ -61,7 +63,7 @@ BackupUSSY is a comprehensive LTO tape archive solution designed for Windows env
 
 ## 🚀 Quick Start
 
-### **Standalone Edition (Recommended) - No Python Required!**
+### **Standalone Edition (Experimental) - No Python Required!**
 
 [![Download Latest Release](https://img.shields.io/github/release/mojomast/backupussy.svg?style=flat-square)](https://github.com/mojomast/backupussy/releases/latest)
 
@@ -88,7 +90,7 @@ python src/database_init.py
 
 ## 📋 System Requirements
 
-### Standalone Version (Recommended)
+### Standalone Version (Experimental)
 - **OS**: Windows 10/11 (64-bit)
 - **RAM**: 4GB (8GB recommended for large archives)
 - **Storage**: 20MB for application + space for archives
@@ -499,7 +501,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ---
 
-**🎉 BackupUSSY v0.2.0: Both GUI and CLI are production-ready and fucking awesome! 🎉**
+**🎉 BackupUSSY v0.2.0: Experimental release – not production-ready! 🎉**
 
 **Choose Your Interface:**
 - 🖥️ **GUI Mode**: `python src/gui.py` - Traditional point-and-click interface

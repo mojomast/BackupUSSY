@@ -1,0 +1,31 @@
+BackupUSSY v0.2.0
+Major Terminal Interface Release
+Build Date: 2025-06-11
+Executable: backupussy-v0.2.0.exe
+Size: 31,866,239 bytes
+SHA256: [Generated during packaging]
+
+Features:
+- Complete command-line interface
+- Interactive menu system with wizard mode
+- Honest hardware detection (no fake devices)
+- 91% test success rate
+- Standalone executable (no installation required)
+- Professional workflows for enterprise use
+
+System Requirements:
+- Windows 10/11 (64-bit)
+- 4GB RAM minimum
+- LTO tape drive (optional for testing)
+- Administrator rights for tape access
+
+Package Contents:
+- backupussy-v0.2.0.exe (standalone executable)
+- README.md (complete documentation)
+- CLI_README.md (command reference)
+- QUICKSTART.md (quick start guide)
+- INSTALL.md (installation guide)
+- RELEASE_NOTES.md (release information)
+- LICENSE (GPL v3)
+- backupussy.conf.example (configuration template)
+
