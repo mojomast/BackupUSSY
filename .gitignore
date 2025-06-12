@@ -121,3 +121,12 @@ BackupUSSY-*.zip
 # GitHub Actions (not needed for this project)
 .github/
 
+
+# Release management scripts and notes
+release_management/
+
+# Local development and planning files
+DEVELOPMENT_SUMMARY.md
+plan.md
+pytest.ini
+tests/
